@@ -35,14 +35,14 @@ export function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+    <header className="sticky top-0 z-50 w-full border-b border-white/15 bg-[#6b3e00] text-white">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Users className="h-4 w-4 text-primary-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f6f3ea]">
+              <Users className="h-4 w-4 text-[#6b3e00]" />
             </div>
-            <span className="font-semibold text-foreground">RMUTL Club</span>
+            <span className="font-semibold text-white">RMUTL Club</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
@@ -53,8 +53,8 @@ export function Navbar() {
                 className={cn(
                   "px-3 py-1.5 text-sm rounded-md transition-colors",
                   pathname === item.href
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-white/20 text-white font-medium"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 )}
               >
                 {item.name}
@@ -68,9 +68,13 @@ export function Navbar() {
             <div className="hidden md:block">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-white hover:bg-white/15 hover:text-white focus-visible:ring-white/50"
+                  >
                     <Avatar className="h-6 w-6">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                      <AvatarFallback className="bg-white/20 text-white text-xs">
                         {user.firstName.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
@@ -118,10 +122,19 @@ export function Navbar() {
             </div>
           ) : (
             <div className="hidden md:flex items-center gap-2">
-              <Button asChild variant="ghost" size="sm">
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="text-white hover:bg-white/15 hover:text-white focus-visible:ring-white/50"
+              >
                 <Link href="/login">เข้าสู่ระบบ</Link>
               </Button>
-              <Button asChild size="sm">
+              <Button
+                asChild
+                size="sm"
+                className="bg-[#f6f3ea] text-[#6b3e00] hover:bg-white focus-visible:ring-white/50"
+              >
                 <Link href="/register">สมัครสมาชิก</Link>
               </Button>
             </div>
@@ -129,11 +142,15 @@ export function Navbar() {
 
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-white hover:bg-white/15 hover:text-white focus-visible:ring-white/50"
+              >
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-64">
+            <SheetContent side="right" className="w-64 bg-[#f6f3ea] text-foreground">
               <div className="flex flex-col gap-4 pt-4">
                 {user && (
                   <div className="flex items-center gap-3 pb-4 border-b">
@@ -157,8 +174,8 @@ export function Navbar() {
                       className={cn(
                         "px-3 py-2 text-sm rounded-md transition-colors",
                         pathname === item.href
-                          ? "bg-secondary text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
+                          ? "bg-[#6b3e00] text-white font-medium"
+                          : "text-foreground/70 hover:text-foreground hover:bg-black/5"
                       )}
                     >
                       {item.name}

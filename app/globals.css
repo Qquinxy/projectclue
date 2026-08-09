@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.99 0 0);
+  --background: #f6f3ea;
   --foreground: oklch(0.15 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.15 0 0);
@@ -119,7 +119,39 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    background-color: #f6f3ea;
+  }
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ---- Club marquee ---------------------------------------------------- */
+/* Declared at the top level (outside every @layer) so the keyframes are
+   globally available and the rule sits in the unlayered bucket, which
+   outranks anything Tailwind emits in its own layers.
+
+   The track holds the card list twice; shifting by exactly one copy (half
+   the track plus half a gap) makes the loop seamless with no visible jump.
+   Runs unconditionally: no hover pause, no focus pause, and no
+   prefers-reduced-motion override. */
+@keyframes club-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-50% - 0.5rem));
+  }
+}
+
+.club-marquee-track {
+  animation-name: club-marquee;
+  animation-duration: 24s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: normal;
+  animation-fill-mode: none;
+  animation-play-state: running;
+  will-change: transform;
 }
