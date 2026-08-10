@@ -56,7 +56,7 @@ export default function VolunteerHoursPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">ชั่วโมงสะสมทั้งหมด</p>
-                <p className="text-4xl font-bold text-primary">{totalHours}</p>
+                <p className="numeric-font text-4xl font-bold text-primary">{totalHours}</p>
                 <p className="text-sm text-muted-foreground">ชั่วโมง</p>
               </div>
               <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
@@ -71,7 +71,7 @@ export default function VolunteerHoursPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">เป้าหมาย</p>
-                <p className="text-4xl font-bold text-foreground">{requiredHours}</p>
+                <p className="numeric-font text-4xl font-bold text-foreground">{requiredHours}</p>
                 <p className="text-sm text-muted-foreground">ชั่วโมง</p>
               </div>
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
@@ -88,7 +88,7 @@ export default function VolunteerHoursPage() {
                 <p className="text-sm text-muted-foreground mb-1">
                   {remainingHours > 0 ? "ต้องการอีก" : "เกินเป้าหมาย"}
                 </p>
-                <p className="text-4xl font-bold text-foreground">
+                <p className="numeric-font text-4xl font-bold text-foreground">
                   {remainingHours > 0 ? remainingHours : totalHours - requiredHours}
                 </p>
                 <p className="text-sm text-muted-foreground">ชั่วโมง</p>
@@ -113,9 +113,9 @@ export default function VolunteerHoursPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">
-                {totalHours} / {requiredHours} ชั่วโมง
+                <span className="numeric-font">{totalHours} / {requiredHours}</span> ชั่วโมง
               </span>
-              <span className="font-semibold text-primary">{progressPercent}%</span>
+              <span className="numeric-font font-semibold text-primary">{progressPercent}%</span>
             </div>
             <div className="h-4 bg-muted rounded-full overflow-hidden">
               <div 
@@ -130,7 +130,7 @@ export default function VolunteerHoursPage() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                เข้าร่วมกิจกรรมจิตอาสาเพิ่มอีก {remainingHours} ชั่วโมง เพื่อให้ครบตามเกณฑ์ที่กำหนด
+                เข้าร่วมกิจกรรมจิตอาสาเพิ่มอีก <span className="numeric-font">{remainingHours}</span> ชั่วโมง เพื่อให้ครบตามเกณฑ์ที่กำหนด
               </p>
             )}
           </div>
@@ -174,7 +174,7 @@ export default function VolunteerHoursPage() {
                       <TableCell className="text-muted-foreground">
                         {record.activity?.clubName}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="numeric-font text-muted-foreground">
                         {record.attendedAt && new Date(record.attendedAt).toLocaleDateString("th-TH", {
                           day: "numeric",
                           month: "long",
@@ -183,7 +183,7 @@ export default function VolunteerHoursPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge variant="secondary" className="font-semibold">
-                          {record.hoursEarned} ชม.
+                          <span className="numeric-font">{record.hoursEarned}</span>&nbsp;ชม.
                         </Badge>
                       </TableCell>
                     </TableRow>

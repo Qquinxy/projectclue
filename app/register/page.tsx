@@ -94,6 +94,7 @@ export default function RegisterPage() {
                 <FieldLabel htmlFor="studentId">รหัสนักศึกษา</FieldLabel>
                 <Input
                   id="studentId"
+                  className="numeric-font"
                   placeholder="64010001"
                   value={formData.studentId}
                   onChange={(e) => handleChange("studentId", e.target.value)}

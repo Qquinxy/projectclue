@@ -35,7 +35,7 @@ export function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/15 bg-[#6b3e00] text-white">
+    <header className="navbar-shadow sticky top-0 z-50 w-full border-b border-white/15 bg-[#6b3e00] text-white">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">

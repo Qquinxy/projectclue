@@ -66,13 +66,13 @@ export default function MyActivitiesPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-accent">{upcomingActivities.length}</div>
+            <div className="numeric-font text-2xl font-bold text-accent">{upcomingActivities.length}</div>
             <div className="text-sm text-muted-foreground">กำลังจะมา</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-primary">{completedActivities.length}</div>
+            <div className="numeric-font text-2xl font-bold text-primary">{completedActivities.length}</div>
             <div className="text-sm text-muted-foreground">เข้าร่วมแล้ว</div>
           </CardContent>
         </Card>
@@ -89,13 +89,13 @@ export default function MyActivitiesPage() {
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="w-full max-w-md grid grid-cols-3">
           <TabsTrigger value="upcoming">
-            กำลังจะมา ({upcomingActivities.length})
+            กำลังจะมา (<span className="numeric-font">{upcomingActivities.length}</span>)
           </TabsTrigger>
           <TabsTrigger value="completed">
-            เข้าร่วมแล้ว ({completedActivities.length})
+            เข้าร่วมแล้ว (<span className="numeric-font">{completedActivities.length}</span>)
           </TabsTrigger>
           <TabsTrigger value="all">
-            ทั้งหมด ({allActivities.length})
+            ทั้งหมด (<span className="numeric-font">{allActivities.length}</span>)
           </TabsTrigger>
         </TabsList>
 
@@ -179,7 +179,7 @@ function ActivityCard({ participation }: { participation: typeof mockParticipati
             <div className="grid sm:grid-cols-2 gap-2 text-sm text-muted-foreground mb-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary/70" />
-                <span>
+                <span className="numeric-font">
                   {new Date(activity.date).toLocaleDateString("th-TH", {
                     day: "numeric",
                     month: "long",
@@ -189,7 +189,9 @@ function ActivityCard({ participation }: { participation: typeof mockParticipati
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary/70" />
-                <span>{activity.startTime} - {activity.endTime} น.</span>
+                <span>
+                  <span className="numeric-font">{activity.startTime} - {activity.endTime}</span> น.
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary/70" />
@@ -207,7 +209,7 @@ function ActivityCard({ participation }: { participation: typeof mockParticipati
 
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">
-                ลงทะเบียนเมื่อ {new Date(participation.registeredAt).toLocaleDateString("th-TH")}
+                ลงทะเบียนเมื่อ <span className="numeric-font">{new Date(participation.registeredAt).toLocaleDateString("th-TH")}</span>
               </span>
               <Button asChild variant="ghost" size="sm">
                 <Link href={`/activities/${activity.id}`}>

@@ -118,7 +118,7 @@ export default function AdminActivitiesPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
-            รายการกิจกรรม ({filteredActivities.length})
+            รายการกิจกรรม (<span className="numeric-font">{filteredActivities.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -159,30 +159,30 @@ export default function AdminActivitiesPage() {
                         {activity.clubName}
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">
+                        <div className="numeric-font text-sm">
                           {new Date(activity.date).toLocaleDateString("th-TH", {
                             day: "numeric",
                             month: "short",
                             year: "numeric"
                           })}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="numeric-font text-xs text-muted-foreground">
                           {activity.startTime} - {activity.endTime}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className={cn("font-medium", isFull && "text-destructive")}>
+                          <span className={cn("numeric-font font-medium", isFull && "text-destructive")}>
                             {activity.currentParticipants}
                           </span>
-                          <span className="text-muted-foreground">/ {activity.maxParticipants}</span>
+                          <span className="numeric-font text-muted-foreground">/ {activity.maxParticipants}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         {activity.volunteerHours > 0 ? (
                           <Badge variant="secondary" className="gap-1">
                             <Award className="h-3 w-3" />
-                            {activity.volunteerHours}
+                            <span className="numeric-font">{activity.volunteerHours}</span>
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground">-</span>

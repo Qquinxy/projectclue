@@ -75,11 +75,13 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Club Image */}
               <div className="lg:w-1/3">
-                <div className="relative aspect-video lg:aspect-square rounded-xl overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Users className="h-24 w-24 text-primary/30" />
-                  </div>
-                </div>
+                {/* Reserved club-image area. Intentionally empty — no photo,
+                    no external image — so the layout keeps its space until
+                    real club photography is supplied. */}
+                <div
+                  aria-hidden
+                  className="relative aspect-video lg:aspect-square rounded-xl border border-dashed border-[#d8d0bd] bg-gradient-to-br from-primary/10 to-accent/10"
+                />
               </div>
 
               {/* Club Info */}
@@ -113,7 +115,9 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">สมาชิก</div>
-                      <div className="font-semibold">{club.memberCount}/{club.maxMembers} คน</div>
+                      <div className="font-semibold">
+                        <span className="numeric-font">{club.memberCount}/{club.maxMembers}</span> คน
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -163,7 +167,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                         <div className="p-4 bg-muted rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">รหัสนักศึกษา:</span>
-                            <span className="font-medium">{student.studentId}</span>
+                            <span className="numeric-font font-medium">{student.studentId}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">ชื่อ-นามสกุล:</span>
@@ -272,7 +276,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                     </div>
                     <div className="flex items-center gap-3">
                       <Phone className="h-5 w-5 text-primary" />
-                      <span className="text-muted-foreground">{club.contactPhone}</span>
+                      <span className="numeric-font text-muted-foreground">{club.contactPhone}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -284,15 +288,19 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">สมาชิกปัจจุบัน</span>
-                      <span className="font-semibold">{club.memberCount} คน</span>
+                      <span className="font-semibold">
+                        <span className="numeric-font">{club.memberCount}</span> คน
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">รับได้สูงสุด</span>
-                      <span className="font-semibold">{club.maxMembers} คน</span>
+                      <span className="font-semibold">
+                        <span className="numeric-font">{club.maxMembers}</span> คน
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">ก่อตั้งเมื่อ</span>
-                      <span className="font-semibold">
+                      <span className="numeric-font font-semibold">
                         {new Date(club.createdAt).toLocaleDateString("th-TH", {
                           year: "numeric",
                           month: "long"
@@ -302,7 +310,9 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="pt-2">
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-muted-foreground">ที่ว่าง</span>
-                        <span>{club.maxMembers - club.memberCount} ที่</span>
+                        <span>
+                          <span className="numeric-font">{club.maxMembers - club.memberCount}</span> ที่
+                        </span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div 

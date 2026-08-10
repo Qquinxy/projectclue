@@ -61,7 +61,7 @@ export default function ProfilePage() {
                   <h2 className="text-2xl font-bold text-foreground">
                     {student.firstName} {student.lastName}
                   </h2>
-                  <p className="text-muted-foreground">รหัสนักศึกษา: {student.studentId}</p>
+                  <p className="text-muted-foreground">รหัสนักศึกษา: <span className="numeric-font">{student.studentId}</span></p>
                 </div>
 
                 <Separator />
@@ -125,7 +125,7 @@ export default function ProfilePage() {
                 <Users className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{activeMemberships}</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">{activeMemberships}</div>
                 <div className="text-sm text-muted-foreground">ชมรมที่เข้าร่วม</div>
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function ProfilePage() {
                 <Calendar className="h-6 w-6 text-accent" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{attendedActivities}</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">{attendedActivities}</div>
                 <div className="text-sm text-muted-foreground">กิจกรรมที่เข้าร่วม</div>
               </div>
             </div>
@@ -149,7 +149,7 @@ export default function ProfilePage() {
                 <Award className="h-6 w-6 text-chart-3" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{totalVolunteerHours}</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">{totalVolunteerHours}</div>
                 <div className="text-sm text-muted-foreground">ชั่วโมงจิตอาสา</div>
               </div>
             </div>
@@ -169,7 +169,7 @@ export default function ProfilePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">ชั้นปี</div>
-              <div className="text-xl font-semibold text-foreground">ปี {student.year}</div>
+              <div className="text-xl font-semibold text-foreground">ปี <span className="numeric-font">{student.year}</span></div>
             </div>
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">คณะ</div>

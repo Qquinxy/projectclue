@@ -101,7 +101,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     {activity.volunteerHours > 0 && (
                       <Badge variant="secondary" className="text-sm">
                         <Award className="h-3 w-3 mr-1" />
-                        {activity.volunteerHours} ชม.
+                        <span className="numeric-font">{activity.volunteerHours}</span>&nbsp;ชม.
                       </Badge>
                     )}
                   </div>
@@ -137,7 +137,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">วันที่</div>
-                      <div className="font-semibold">
+                      <div className="numeric-font font-semibold">
                         {new Date(activity.date).toLocaleDateString("th-TH", {
                           weekday: "long",
                           year: "numeric",
@@ -153,7 +153,9 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">เวลา</div>
-                      <div className="font-semibold">{activity.startTime} - {activity.endTime} น.</div>
+                      <div className="font-semibold">
+                        <span className="numeric-font">{activity.startTime} - {activity.endTime}</span> น.
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -172,8 +174,15 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     <div>
                       <div className="text-sm text-muted-foreground">ผู้เข้าร่วม</div>
                       <div className={cn("font-semibold", isFull && "text-destructive")}>
-                        {activity.currentParticipants}/{activity.maxParticipants} คน
-                        {isFull ? " (เต็มแล้ว)" : ` (เหลือ ${spotsLeft} ที่)`}
+                        <span className="numeric-font">
+                          {activity.currentParticipants}/{activity.maxParticipants}
+                        </span>{" "}
+                        คน
+                        {isFull ? (
+                          " (เต็มแล้ว)"
+                        ) : (
+                          <> (เหลือ <span className="numeric-font">{spotsLeft}</span> ที่)</>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -197,7 +206,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                         <div className="p-4 bg-muted rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">รหัสนักศึกษา:</span>
-                            <span className="font-medium">{student.studentId}</span>
+                            <span className="numeric-font font-medium">{student.studentId}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">ชื่อ-นามสกุล:</span>
@@ -210,7 +219,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                             <div>
                               <div className="font-medium text-sm">ชั่วโมงจิตอาสา</div>
                               <div className="text-sm text-muted-foreground">
-                                คุณจะได้รับ {activity.volunteerHours} ชั่วโมงเมื่อเข้าร่วมกิจกรรมนี้
+                                คุณจะได้รับ <span className="numeric-font">{activity.volunteerHours}</span> ชั่วโมงเมื่อเข้าร่วมกิจกรรมนี้
                               </div>
                             </div>
                           </div>
@@ -290,7 +299,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     <p>
                       กิจกรรมนี้จัดโดย <strong>{activity.clubName}</strong> 
                       {activity.volunteerHours > 0 && (
-                        <> ผู้เข้าร่วมจะได้รับชั่วโมงจิตอาสา <strong>{activity.volunteerHours} ชั่วโมง</strong></>
+                        <> ผู้เข้าร่วมจะได้รับชั่วโมงจิตอาสา <strong><span className="numeric-font">{activity.volunteerHours}</span> ชั่วโมง</strong></>
                       )}
                     </p>
                   </CardContent>
@@ -317,7 +326,9 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     {activity.volunteerHours > 0 && (
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">ชั่วโมงจิตอาสา</span>
-                        <span className="font-semibold text-primary">{activity.volunteerHours} ชม.</span>
+                        <span className="font-semibold text-primary">
+                          <span className="numeric-font">{activity.volunteerHours}</span> ชม.
+                        </span>
                       </div>
                     )}
                     <div className="pt-2">

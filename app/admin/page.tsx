@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
                   <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
                     <stat.icon className={`h-6 w-6 ${stat.color}`} />
                   </div>
-                  <span className="text-3xl font-bold text-foreground">{stat.value}</span>
+                  <span className="numeric-font text-3xl font-bold text-foreground">{stat.value}</span>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">{stat.label}</p>
               </CardContent>
@@ -141,11 +141,11 @@ export default function AdminDashboardPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-foreground truncate">{club.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {club.memberCount} สมาชิก
+                      <span className="numeric-font">{club.memberCount}</span> สมาชิก
                     </div>
                   </div>
                   <Badge variant="outline">
-                    {club.memberCount}/{club.maxMembers}
+                    <span className="numeric-font">{club.memberCount}/{club.maxMembers}</span>
                   </Badge>
                 </div>
               ))}
@@ -177,14 +177,16 @@ export default function AdminDashboardPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-foreground truncate">{activity.title}</div>
                     <div className="text-sm text-muted-foreground">
-                      {new Date(activity.date).toLocaleDateString("th-TH", {
-                        day: "numeric",
-                        month: "short"
-                      })} - {activity.clubName}
+                      <span className="numeric-font">
+                        {new Date(activity.date).toLocaleDateString("th-TH", {
+                          day: "numeric",
+                          month: "short"
+                        })}
+                      </span> - {activity.clubName}
                     </div>
                   </div>
                   <Badge variant="secondary">
-                    {activity.currentParticipants}/{activity.maxParticipants}
+                    <span className="numeric-font">{activity.currentParticipants}/{activity.maxParticipants}</span>
                   </Badge>
                 </div>
               ))}

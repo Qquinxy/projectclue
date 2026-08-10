@@ -11,11 +11,20 @@ import { CLUB_CATEGORIES, type ClubCategory } from "@/lib/types"
 import { Search, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const TOTAL_CLUBS = 8
+const TOTAL_CLUBS = mockClubs.length
 
 export default function ClubsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<ClubCategory | "all">("all")
+
+  // How many clubs sit in each category, so the filter chips can show a count
+  // and users can pick a category instead of scrolling the full list.
+  const categoryCounts = useMemo(() => {
+    return mockClubs.reduce<Record<string, number>>((acc, club) => {
+      acc[club.category] = (acc[club.category] ?? 0) + 1
+      return acc
+    }, {})
+  }, [])
 
   const filteredClubs = useMemo(() => {
     return mockClubs.filter((club) => {
@@ -48,7 +57,7 @@ export default function ClubsPage() {
                 ชมรมทั้งหมด
               </h1>
               <p className="text-muted-foreground mb-8">
-                ค้นหาและเข้าร่วมชมรมที่คุณสนใจ จากกว่า {TOTAL_CLUBS} ชมรมในมหาวิทยาลัย
+                ค้นหาและเข้าร่วมชมรมที่คุณสนใจ จากกว่า <span className="numeric-font">{TOTAL_CLUBS}</span> ชมรมในมหาวิทยาลัย
               </p>
 
               {/* Search */}
@@ -72,10 +81,11 @@ export default function ClubsPage() {
             <div className="flex flex-wrap justify-center gap-2">
               <Badge
                 variant={selectedCategory === "all" ? "default" : "outline"}
-                className="cursor-pointer px-4 py-2 text-sm"
+                className="cursor-pointer px-4 py-2 text-sm transition-colors"
                 onClick={() => setSelectedCategory("all")}
               >
                 ทั้งหมด
+                <span className="numeric-font ml-1.5 opacity-70">{mockClubs.length}</span>
               </Badge>
               {CLUB_CATEGORIES.map((category) => (
                 <Badge
@@ -83,11 +93,14 @@ export default function ClubsPage() {
                   variant={selectedCategory === category.value ? "default" : "outline"}
                   className={cn(
                     "cursor-pointer px-4 py-2 text-sm transition-colors",
-                    selectedCategory === category.value && category.color
+                    selectedCategory === category.value && `${category.color} text-white border-transparent`
                   )}
                   onClick={() => setSelectedCategory(category.value)}
                 >
                   {category.label}
+                  <span className="numeric-font ml-1.5 opacity-70">
+                    {categoryCounts[category.value] ?? 0}
+                  </span>
                 </Badge>
               ))}
             </div>
@@ -100,7 +113,7 @@ export default function ClubsPage() {
             {filteredClubs.length > 0 ? (
               <>
                 <p className="text-muted-foreground mb-6">
-                  แสดง {filteredClubs.length} ชมรม
+                  แสดง <span className="numeric-font">{filteredClubs.length}</span> ชมรม
                 </p>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredClubs.map((club) => (

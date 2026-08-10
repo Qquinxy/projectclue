@@ -84,7 +84,7 @@ export default function DashboardPage() {
               สวัสดี, {student.firstName}
             </h1>
             <p className="text-muted-foreground">
-              {student.studentId} | {student.faculty}
+              <span className="numeric-font">{student.studentId}</span> | {student.faculty}
             </p>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
               <CardContent className="p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <stat.icon className={`h-8 w-8 ${stat.color}`} />
-                  <span className="text-3xl font-bold text-foreground">{stat.value}</span>
+                  <span className="numeric-font text-3xl font-bold text-foreground">{stat.value}</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{stat.label}</p>
               </CardContent>
@@ -148,7 +148,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <Badge variant="outline" className="flex-shrink-0">
-                        {club?.memberCount} คน
+                        <span className="numeric-font">{club?.memberCount}</span>&nbsp;คน
                       </Badge>
                     </Link>
                   )
@@ -193,16 +193,18 @@ export default function DashboardPage() {
                       <div className="font-medium text-foreground truncate">{activity?.title}</div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        {new Date(activity?.date || "").toLocaleDateString("th-TH", {
-                          day: "numeric",
-                          month: "short"
-                        })}
+                        <span className="numeric-font">
+                          {new Date(activity?.date || "").toLocaleDateString("th-TH", {
+                            day: "numeric",
+                            month: "short"
+                          })}
+                        </span>
                       </div>
                     </div>
                     {(activity?.volunteerHours ?? 0) > 0 && (
                       <Badge variant="secondary" className="flex-shrink-0">
                         <Award className="h-3 w-3 mr-1" />
-                        {activity?.volunteerHours} ชม.
+                        <span className="numeric-font">{activity?.volunteerHours}</span>&nbsp;ชม.
                       </Badge>
                     )}
                   </Link>
@@ -233,19 +235,19 @@ export default function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-3xl font-bold text-primary">{totalVolunteerHours}</span>
+                <span className="numeric-font text-3xl font-bold text-primary">{totalVolunteerHours}</span>
               </div>
               <div>
                 <div className="text-lg font-semibold text-foreground">ชั่วโมงสะสม</div>
                 <div className="text-sm text-muted-foreground">
-                  จากกิจกรรม {myParticipations.filter(p => p.status === "attended").length} กิจกรรม
+                  จากกิจกรรม <span className="numeric-font">{myParticipations.filter(p => p.status === "attended").length}</span> กิจกรรม
                 </div>
               </div>
             </div>
             <div className="flex-1 max-w-md">
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-muted-foreground">ความคืบหน้า (เป้าหมาย 36 ชม.)</span>
-                <span className="font-medium">{Math.min(100, Math.round((totalVolunteerHours / 36) * 100))}%</span>
+                <span className="text-muted-foreground">ความคืบหน้า (เป้าหมาย <span className="numeric-font">36</span> ชม.)</span>
+                <span className="numeric-font font-medium">{Math.min(100, Math.round((totalVolunteerHours / 36) * 100))}%</span>
               </div>
               <div className="h-3 bg-muted rounded-full overflow-hidden">
                 <div 
@@ -254,7 +256,7 @@ export default function DashboardPage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                ต้องการอีก {Math.max(0, 36 - totalVolunteerHours)} ชั่วโมง เพื่อครบตามเกณฑ์
+                ต้องการอีก <span className="numeric-font">{Math.max(0, 36 - totalVolunteerHours)}</span> ชั่วโมง เพื่อครบตามเกณฑ์
               </p>
             </div>
           </div>

@@ -29,13 +29,12 @@ export function ClubMarquee({ clubs }: ClubMarqueeProps) {
         className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-[#f6f3ea] to-transparent sm:w-16"
       />
 
-      <div className="club-marquee-track flex w-max items-stretch gap-4 py-2">
+      <div className="club-marquee-track flex w-max items-stretch gap-4">
         {copies.map((copy) =>
           clubs.map((club) => (
             <div
               key={`${copy.key}-${club.id}`}
               aria-hidden={copy.hidden || undefined}
-              inert={copy.hidden || undefined}
               className="relative w-[260px] shrink-0 sm:w-[300px] lg:w-[340px]"
             >
               <ClubCard club={club} />

@@ -42,7 +42,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
               {activity.volunteerHours > 0 && (
                 <Badge variant="outline" className="text-xs">
                   <Award className="h-3 w-3 mr-1" />
-                  {activity.volunteerHours} ชม.
+                  <span className="numeric-font">{activity.volunteerHours}</span>&nbsp;ชม.
                 </Badge>
               )}
             </div>
@@ -57,17 +57,23 @@ export function ActivityCard({ activity }: ActivityCardProps) {
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {new Date(activity.date).toLocaleDateString("th-TH", { 
-                month: "short",
-                day: "numeric"
-              })}
+              <span className="numeric-font">
+                {new Date(activity.date).toLocaleDateString("th-TH", {
+                  month: "short",
+                  day: "numeric"
+                })}
+              </span>
             </span>
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {activity.startTime}
+              <span className="numeric-font">{activity.startTime}</span>
             </span>
             <span className={cn(isFull && "text-destructive")}>
-              {isFull ? "เต็ม" : `เหลือ ${spotsLeft} ที่`}
+              {isFull ? "เต็ม" : (
+                <>
+                  เหลือ <span className="numeric-font">{spotsLeft}</span> ที่
+                </>
+              )}
             </span>
           </div>
         </CardContent>

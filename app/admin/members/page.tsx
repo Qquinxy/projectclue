@@ -132,7 +132,7 @@ export default function AdminMembersPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <UserCheck className="h-5 w-5 text-primary" />
-            รายชื่อสมาชิก ({filteredMemberships.length})
+            รายชื่อสมาชิก (<span className="numeric-font">{filteredMemberships.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -167,7 +167,7 @@ export default function AdminMembersPage() {
                             <div className="font-medium text-foreground">
                               {membership.student?.firstName} {membership.student?.lastName}
                             </div>
-                            <div className="text-sm text-muted-foreground">
+                            <div className="numeric-font text-sm text-muted-foreground">
                               {membership.student?.studentId}
                             </div>
                           </div>
@@ -179,7 +179,7 @@ export default function AdminMembersPage() {
                       <TableCell>
                         <Badge variant="outline">{role?.label}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="numeric-font text-muted-foreground">
                         {new Date(membership.joinedAt).toLocaleDateString("th-TH", {
                           day: "numeric",
                           month: "short",

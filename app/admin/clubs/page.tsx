@@ -91,7 +91,7 @@ export default function AdminClubsPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            รายชื่อชมรม ({filteredClubs.length})
+            รายชื่อชมรม (<span className="numeric-font">{filteredClubs.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -139,8 +139,8 @@ export default function AdminClubsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{club.memberCount}</span>
-                          <span className="text-muted-foreground">/ {club.maxMembers}</span>
+                          <span className="numeric-font font-medium">{club.memberCount}</span>
+                          <span className="numeric-font text-muted-foreground">/ {club.maxMembers}</span>
                         </div>
                       </TableCell>
                       <TableCell>

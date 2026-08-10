@@ -61,10 +61,10 @@ export default function HomePage() {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16">
               {stats.map((stat) => (
-                <Card key={stat.label} className="border-white/40 bg-[#f6f3ea]/90 backdrop-blur-md shadow-lg">
+                <Card key={stat.label} className="stat-card">
                   <CardContent className="p-4 text-center">
                     <stat.icon className="h-5 w-5 mx-auto mb-2 text-[#6b3e00]" />
-                    <div className="text-2xl font-bold text-foreground">{stat.value}</div>
+                    <div className="numeric-font text-2xl font-bold text-foreground">{stat.value}</div>
                     <div className="text-xs text-muted-foreground">{stat.label}</div>
                   </CardContent>
                 </Card>

@@ -210,19 +210,19 @@ export default function AdminSettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-foreground">6</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">6</div>
                 <div className="text-sm text-muted-foreground">ชมรม</div>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-foreground">6</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">6</div>
                 <div className="text-sm text-muted-foreground">กิจกรรม</div>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-foreground">2</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">2</div>
                 <div className="text-sm text-muted-foreground">นักศึกษา</div>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-foreground">3</div>
+                <div className="numeric-font text-2xl font-bold text-foreground">3</div>
                 <div className="text-sm text-muted-foreground">สมาชิก</div>
               </div>
             </div>

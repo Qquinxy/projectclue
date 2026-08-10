@@ -94,7 +94,7 @@ export default function MyClubsPage() {
       {/* Active Memberships */}
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-4">
-          ชมรมที่เข้าร่วม ({activeClubs.length})
+          ชมรมที่เข้าร่วม (<span className="numeric-font">{activeClubs.length}</span>)
         </h2>
         
         {activeClubs.length > 0 ? (
@@ -144,16 +144,21 @@ export default function MyClubsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary/70" />
-                        <span>{membership.club?.memberCount} สมาชิก</span>
+                        <span>
+                          <span className="numeric-font">{membership.club?.memberCount}</span> สมาชิก
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-3 border-t border-border">
                       <span className="text-xs text-muted-foreground">
-                        เข้าร่วมเมื่อ {new Date(membership.joinedAt).toLocaleDateString("th-TH", {
-                          month: "short",
-                          year: "numeric"
-                        })}
+                        เข้าร่วมเมื่อ{" "}
+                        <span className="numeric-font">
+                          {new Date(membership.joinedAt).toLocaleDateString("th-TH", {
+                            month: "short",
+                            year: "numeric"
+                          })}
+                        </span>
                       </span>
                       <Button asChild variant="ghost" size="sm">
                         <Link href={`/clubs/${membership.club?.id}`}>

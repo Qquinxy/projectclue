@@ -119,7 +119,7 @@ export default function ActivitiesPage() {
             {filteredActivities.length > 0 ? (
               <>
                 <p className="text-muted-foreground mb-6">
-                  แสดง {filteredActivities.length} กิจกรรม
+                  แสดง <span className="numeric-font">{filteredActivities.length}</span> กิจกรรม
                 </p>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredActivities.map((activity) => (
