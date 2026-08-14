@@ -28,6 +28,7 @@ export function Navbar() {
   const router = useRouter()
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
+  const isAdmin = user?.role === "superadmin" || user?.role === "club_admin"
 
   const handleLogout = () => {
     logout()
@@ -105,13 +106,17 @@ export function Navbar() {
                       กิจกรรมของฉัน
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin" className="gap-2">
-                      <Settings className="h-4 w-4" />
-                      ผู้ดูแลระบบ
-                    </Link>
-                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin" className="gap-2">
+                          <Settings className="h-4 w-4" />
+                          ผู้ดูแลระบบ
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive gap-2">
                     <LogOut className="h-4 w-4" />
@@ -192,14 +197,16 @@ export function Navbar() {
                       <LayoutDashboard className="h-4 w-4" />
                       แดชบอร์ด
                     </Link>
-                    <Link
-                      href="/admin"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-secondary"
-                    >
-                      <Settings className="h-4 w-4" />
-                      ผู้ดูแลระบบ
-                    </Link>
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-secondary"
+                      >
+                        <Settings className="h-4 w-4" />
+                        ผู้ดูแลระบบ
+                      </Link>
+                    )}
                     <button
                       onClick={() => {
                         handleLogout()
