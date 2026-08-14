@@ -1,33 +1,103 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { getCurrentStudent, mockMemberships, mockParticipations } from "@/lib/mock-data"
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Building, 
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
+import {
+  User,
+  Mail,
+  Phone,
+  Building,
   BookOpen,
   Calendar,
   Users,
-  Award
+  Award,
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 
+interface ListResponse<T> {
+  success: boolean
+  message?: string
+  data: T[]
+}
+
+interface VolunteerHoursResponse {
+  success: boolean
+  message?: string
+  data: {
+    totalHours: number
+  }
+}
+
+interface ParticipationItem {
+  status: string
+}
+
+interface ProfileStats {
+  activeClubs: number
+  attendedActivities: number
+  totalVolunteerHours: number
+}
+
 export default function ProfilePage() {
-  const student = getCurrentStudent()
-  
-  const activeMemberships = mockMemberships.filter(
-    m => m.studentId === student.id && m.status === "active"
-  ).length
-  
-  const attendedActivities = mockParticipations.filter(
-    p => p.studentId === student.id && p.status === "attended"
-  ).length
-  
-  const totalVolunteerHours = mockParticipations
-    .filter(p => p.studentId === student.id && p.status === "attended")
-    .reduce((sum, p) => sum + p.hoursEarned, 0)
+  const { user, isLoading: isAuthLoading } = useAuth()
+  const [stats, setStats] = useState<ProfileStats | null>(null)
+  const [isStatsLoading, setIsStatsLoading] = useState(true)
+  const [statsError, setStatsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+
+    const fetchStats = async () => {
+      setIsStatsLoading(true)
+      setStatsError(null)
+
+      try {
+        const [clubsRes, activitiesRes, volunteerRes] = await Promise.all([
+          api<ListResponse<unknown>>("/students/me/clubs"),
+          api<ListResponse<ParticipationItem>>("/students/me/activities"),
+          api<VolunteerHoursResponse>("/students/me/volunteer-hours"),
+        ])
+
+        setStats({
+          activeClubs: clubsRes.data?.length ?? 0,
+          attendedActivities:
+            activitiesRes.data?.filter((p) => p.status === "attended").length ?? 0,
+          totalVolunteerHours: volunteerRes.data?.totalHours ?? 0,
+        })
+      } catch (error) {
+        setStatsError(
+          error instanceof Error ? error.message : "ไม่สามารถโหลดสถิติได้"
+        )
+      } finally {
+        setIsStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [user])
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-24 text-muted-foreground">
+        <AlertCircle className="h-6 w-6" />
+        <p>ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบอีกครั้ง</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -50,18 +120,18 @@ export default function ProfilePage() {
               <div className="flex flex-col items-center">
                 <Avatar className="h-24 w-24">
                   <AvatarFallback className="bg-primary/10 text-primary text-3xl">
-                    {student.firstName.charAt(0)}
+                    {user.firstName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <Badge className="mt-3">นักศึกษาปี {student.year}</Badge>
+                <Badge className="mt-3">นักศึกษาปี {user.year}</Badge>
               </div>
 
               <div className="flex-1 space-y-4">
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    {student.firstName} {student.lastName}
+                    {user.firstName} {user.lastName}
                   </h2>
-                  <p className="text-muted-foreground">รหัสนักศึกษา: <span className="numeric-font">{student.studentId}</span></p>
+                  <p className="text-muted-foreground">รหัสนักศึกษา: <span className="numeric-font">{user.studentId}</span></p>
                 </div>
 
                 <Separator />
@@ -74,7 +144,7 @@ export default function ProfilePage() {
                     <div>
                       <div className="text-sm text-muted-foreground">อีเมล</div>
                       <div className="font-medium text-foreground text-sm truncate max-w-[200px]">
-                        {student.email}
+                        {user.email}
                       </div>
                     </div>
                   </div>
@@ -85,7 +155,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">เบอร์โทรศัพท์</div>
-                      <div className="font-medium text-foreground">{student.phone}</div>
+                      <div className="font-medium text-foreground">{user.phone}</div>
                     </div>
                   </div>
 
@@ -95,7 +165,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">คณะ</div>
-                      <div className="font-medium text-foreground">{student.faculty}</div>
+                      <div className="font-medium text-foreground">{user.faculty}</div>
                     </div>
                   </div>
 
@@ -105,7 +175,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">สาขาวิชา</div>
-                      <div className="font-medium text-foreground">{student.major}</div>
+                      <div className="font-medium text-foreground">{user.major}</div>
                     </div>
                   </div>
                 </div>
@@ -120,39 +190,58 @@ export default function ProfilePage() {
             <CardTitle className="text-lg">สถิติของคุณ</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Users className="h-6 w-6 text-primary" />
+            {isStatsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-              <div>
-                <div className="numeric-font text-2xl font-bold text-foreground">{activeMemberships}</div>
-                <div className="text-sm text-muted-foreground">ชมรมที่เข้าร่วม</div>
+            ) : statsError ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+                <AlertCircle className="h-5 w-5" />
+                <p>{statsError}</p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Users className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <div className="numeric-font text-2xl font-bold text-foreground">
+                      {stats?.activeClubs ?? 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">ชมรมที่เข้าร่วม</div>
+                  </div>
+                </div>
 
-            <Separator />
+                <Separator />
 
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
-                <Calendar className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <div className="numeric-font text-2xl font-bold text-foreground">{attendedActivities}</div>
-                <div className="text-sm text-muted-foreground">กิจกรรมที่เข้าร่วม</div>
-              </div>
-            </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-accent" />
+                  </div>
+                  <div>
+                    <div className="numeric-font text-2xl font-bold text-foreground">
+                      {stats?.attendedActivities ?? 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">กิจกรรมที่เข้าร่วม</div>
+                  </div>
+                </div>
 
-            <Separator />
+                <Separator />
 
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-chart-3/10 flex items-center justify-center">
-                <Award className="h-6 w-6 text-chart-3" />
-              </div>
-              <div>
-                <div className="numeric-font text-2xl font-bold text-foreground">{totalVolunteerHours}</div>
-                <div className="text-sm text-muted-foreground">ชั่วโมงจิตอาสา</div>
-              </div>
-            </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-chart-3/10 flex items-center justify-center">
+                    <Award className="h-6 w-6 text-chart-3" />
+                  </div>
+                  <div>
+                    <div className="numeric-font text-2xl font-bold text-foreground">
+                      {stats?.totalVolunteerHours ?? 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">ชั่วโมงจิตอาสา</div>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -169,15 +258,15 @@ export default function ProfilePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">ชั้นปี</div>
-              <div className="text-xl font-semibold text-foreground">ปี <span className="numeric-font">{student.year}</span></div>
+              <div className="text-xl font-semibold text-foreground">ปี <span className="numeric-font">{user.year}</span></div>
             </div>
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">คณะ</div>
-              <div className="text-xl font-semibold text-foreground">{student.faculty}</div>
+              <div className="text-xl font-semibold text-foreground">{user.faculty}</div>
             </div>
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">สาขาวิชา</div>
-              <div className="text-xl font-semibold text-foreground">{student.major}</div>
+              <div className="text-xl font-semibold text-foreground">{user.major}</div>
             </div>
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">สถานะ</div>

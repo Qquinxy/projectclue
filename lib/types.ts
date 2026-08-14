@@ -56,7 +56,10 @@ export interface Student {
   faculty: string
   major: string
   year: number
+  role: "student" | "club_admin" | "superadmin"
   profileImage: string
+  totalVolunteerHours: number
+  managedClubs: string[]
 }
 
 export interface ClubMembership {

@@ -1,8 +1,11 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -10,37 +13,106 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { 
-  getCurrentStudent, 
-  mockParticipations, 
-  mockActivities 
-} from "@/lib/mock-data"
-import { 
-  Award, 
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
+import {
+  Award,
   Calendar,
   ArrowRight,
   TrendingUp,
   Target,
-  CheckCircle
+  CheckCircle,
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 
-export default function VolunteerHoursPage() {
-  const student = getCurrentStudent()
-  
-  // Get completed participations with volunteer hours
-  const volunteerRecords = mockParticipations
-    .filter(p => p.studentId === student.id && p.status === "attended" && p.hoursEarned > 0)
-    .map(p => {
-      const activity = mockActivities.find(a => a.id === p.activityId)
-      return { ...p, activity }
-    })
-    .filter(p => p.activity)
-    .sort((a, b) => new Date(b.attendedAt || "").getTime() - new Date(a.attendedAt || "").getTime())
+interface VolunteerActivity {
+  _id: string
+  title: string
+  club: {
+    name: string
+  }
+}
 
-  const totalHours = volunteerRecords.reduce((sum, r) => sum + r.hoursEarned, 0)
+interface VolunteerParticipation {
+  _id: string
+  activity: VolunteerActivity
+  status: string
+  hoursEarned: number
+  attendedAt: string | null
+}
+
+interface VolunteerHoursData {
+  totalVolunteerHours: number
+  activitiesCompleted: number
+  history: VolunteerParticipation[]
+}
+
+interface VolunteerHoursResponse {
+  success: boolean
+  message?: string
+  data: VolunteerHoursData
+}
+
+export default function VolunteerHoursPage() {
+  const { user, isLoading: isAuthLoading } = useAuth()
+  const [data, setData] = useState<VolunteerHoursData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+
+    const fetchVolunteerHours = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const response = await api<VolunteerHoursResponse>("/students/me/volunteer-hours")
+        setData(response.data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลชั่วโมงจิตอาสาได้")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchVolunteerHours()
+  }, [user])
+
+  const totalHours = data?.totalVolunteerHours ?? 0
+  const volunteerRecords = data?.history ?? []
   const requiredHours = 36
   const progressPercent = Math.min(100, Math.round((totalHours / requiredHours) * 100))
   const remainingHours = Math.max(0, requiredHours - totalHours)
+
+  if (isAuthLoading || isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">ชั่วโมงจิตอาสา</h1>
+          <p className="text-muted-foreground">ติดตามชั่วโมงจิตอาสาที่คุณสะสม</p>
+        </div>
+        <Card>
+          <CardContent className="py-16 text-center">
+            <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              เกิดข้อผิดพลาด
+            </h3>
+            <p className="text-muted-foreground">{error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -118,7 +190,7 @@ export default function VolunteerHoursPage() {
               <span className="numeric-font font-semibold text-primary">{progressPercent}%</span>
             </div>
             <div className="h-4 bg-muted rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
               />
@@ -162,17 +234,17 @@ export default function VolunteerHoursPage() {
                 </TableHeader>
                 <TableBody>
                   {volunteerRecords.map((record) => (
-                    <TableRow key={record.id}>
+                    <TableRow key={record._id}>
                       <TableCell>
-                        <Link 
-                          href={`/activities/${record.activity?.id}`}
+                        <Link
+                          href={`/activities/${record.activity._id}`}
                           className="font-medium text-foreground hover:text-primary transition-colors"
                         >
-                          {record.activity?.title}
+                          {record.activity.title}
                         </Link>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {record.activity?.clubName}
+                        {record.activity.club.name}
                       </TableCell>
                       <TableCell className="numeric-font text-muted-foreground">
                         {record.attendedAt && new Date(record.attendedAt).toLocaleDateString("th-TH", {

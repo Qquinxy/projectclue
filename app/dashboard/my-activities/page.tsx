@@ -1,22 +1,24 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-  getCurrentStudent, 
-  mockParticipations, 
-  mockActivities 
-} from "@/lib/mock-data"
-import { 
-  Calendar, 
-  MapPin, 
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
+import { ActivityStatus, ParticipationStatus } from "@/lib/types"
+import {
+  Calendar,
+  MapPin,
   Clock,
   Award,
   ArrowRight,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -27,25 +29,75 @@ const participationStatusConfig = {
   cancelled: { label: "ยกเลิก", icon: XCircle, color: "text-muted-foreground" },
 }
 
-export default function MyActivitiesPage() {
-  const student = getCurrentStudent()
-  
-  // Get student's participations with activity data
-  const myParticipations = mockParticipations
-    .filter(p => p.studentId === student.id)
-    .map(p => {
-      const activity = mockActivities.find(a => a.id === p.activityId)
-      return { ...p, activity }
-    })
-    .filter(p => p.activity)
+interface ActivityClub {
+  id: string
+  name: string
+}
 
-  const upcomingActivities = myParticipations.filter(
+interface ParticipationActivity {
+  id: string
+  title: string
+  date: string
+  startTime: string
+  endTime: string
+  location: string
+  volunteerHours: number
+  status: ActivityStatus
+  club: ActivityClub
+}
+
+interface Participation {
+  id: string
+  status: ParticipationStatus
+  registeredAt: string
+  attendedAt: string | null
+  hoursEarned: number
+  activity: ParticipationActivity
+}
+
+interface ActivitiesMeResponse {
+  success: boolean
+  message?: string
+  data: {
+    participations: Participation[]
+  }
+}
+
+export default function MyActivitiesPage() {
+  const { user, isLoading: isAuthLoading } = useAuth()
+  const [participations, setParticipations] = useState<Participation[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+
+    const fetchMyActivities = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const response = await api<ActivitiesMeResponse>("/students/me/activities")
+        setParticipations(
+          (response.data?.participations ?? []).filter(p => p.activity)
+        )
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลกิจกรรมได้")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchMyActivities()
+  }, [user])
+
+  const upcomingActivities = participations.filter(
     p => p.status === "registered" && p.activity?.status === "upcoming"
   )
-  const completedActivities = myParticipations.filter(
+  const completedActivities = participations.filter(
     p => p.status === "attended"
   )
-  const allActivities = myParticipations
+  const allActivities = participations
 
   return (
     <div className="space-y-8">
@@ -62,84 +114,102 @@ export default function MyActivitiesPage() {
         </Button>
       </div>
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      {isAuthLoading || isLoading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
         <Card>
-          <CardContent className="p-4 text-center">
-            <div className="numeric-font text-2xl font-bold text-accent">{upcomingActivities.length}</div>
-            <div className="text-sm text-muted-foreground">กำลังจะมา</div>
+          <CardContent className="py-16 text-center">
+            <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              เกิดข้อผิดพลาด
+            </h3>
+            <p className="text-muted-foreground">{error}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="numeric-font text-2xl font-bold text-primary">{completedActivities.length}</div>
-            <div className="text-sm text-muted-foreground">เข้าร่วมแล้ว</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-foreground">
-              {completedActivities.reduce((sum, p) => sum + p.hoursEarned, 0)}
-            </div>
-            <div className="text-sm text-muted-foreground">ชม.จิตอาสา</div>
-          </CardContent>
-        </Card>
-      </div>
+      ) : (
+        <>
+          {/* Stats Summary */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="numeric-font text-2xl font-bold text-accent">{upcomingActivities.length}</div>
+                <div className="text-sm text-muted-foreground">กำลังจะมา</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="numeric-font text-2xl font-bold text-primary">{completedActivities.length}</div>
+                <div className="text-sm text-muted-foreground">เข้าร่วมแล้ว</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="numeric-font text-2xl font-bold text-foreground">
+                  {completedActivities.reduce((sum, p) => sum + p.hoursEarned, 0)}
+                </div>
+                <div className="text-sm text-muted-foreground">ชม.จิตอาสา</div>
+              </CardContent>
+            </Card>
+          </div>
 
-      <Tabs defaultValue="upcoming" className="w-full">
-        <TabsList className="w-full max-w-md grid grid-cols-3">
-          <TabsTrigger value="upcoming">
-            กำลังจะมา (<span className="numeric-font">{upcomingActivities.length}</span>)
-          </TabsTrigger>
-          <TabsTrigger value="completed">
-            เข้าร่วมแล้ว (<span className="numeric-font">{completedActivities.length}</span>)
-          </TabsTrigger>
-          <TabsTrigger value="all">
-            ทั้งหมด (<span className="numeric-font">{allActivities.length}</span>)
-          </TabsTrigger>
-        </TabsList>
+          <Tabs defaultValue="upcoming" className="w-full">
+            <TabsList className="w-full max-w-md grid grid-cols-3">
+              <TabsTrigger value="upcoming">
+                กำลังจะมา (<span className="numeric-font">{upcomingActivities.length}</span>)
+              </TabsTrigger>
+              <TabsTrigger value="completed">
+                เข้าร่วมแล้ว (<span className="numeric-font">{completedActivities.length}</span>)
+              </TabsTrigger>
+              <TabsTrigger value="all">
+                ทั้งหมด (<span className="numeric-font">{allActivities.length}</span>)
+              </TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="upcoming" className="mt-6">
-          {upcomingActivities.length > 0 ? (
-            <div className="space-y-4">
-              {upcomingActivities.map((participation) => (
-                <ActivityCard key={participation.id} participation={participation} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="ไม่มีกิจกรรมที่กำลังจะมา" />
-          )}
-        </TabsContent>
+            <TabsContent value="upcoming" className="mt-6">
+              {upcomingActivities.length > 0 ? (
+                <div className="space-y-4">
+                  {upcomingActivities.map((participation) => (
+                    <ActivityCard key={participation.id} participation={participation} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="ไม่มีกิจกรรมที่กำลังจะมา" />
+              )}
+            </TabsContent>
 
-        <TabsContent value="completed" className="mt-6">
-          {completedActivities.length > 0 ? (
-            <div className="space-y-4">
-              {completedActivities.map((participation) => (
-                <ActivityCard key={participation.id} participation={participation} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="ยังไม่มีกิจกรรมที่เข้าร่วม" />
-          )}
-        </TabsContent>
+            <TabsContent value="completed" className="mt-6">
+              {completedActivities.length > 0 ? (
+                <div className="space-y-4">
+                  {completedActivities.map((participation) => (
+                    <ActivityCard key={participation.id} participation={participation} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="ยังไม่มีกิจกรรมที่เข้าร่วม" />
+              )}
+            </TabsContent>
 
-        <TabsContent value="all" className="mt-6">
-          {allActivities.length > 0 ? (
-            <div className="space-y-4">
-              {allActivities.map((participation) => (
-                <ActivityCard key={participation.id} participation={participation} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="ยังไม่มีกิจกรรมที่ลงทะเบียน" />
-          )}
-        </TabsContent>
-      </Tabs>
+            <TabsContent value="all" className="mt-6">
+              {allActivities.length > 0 ? (
+                <div className="space-y-4">
+                  {allActivities.map((participation) => (
+                    <ActivityCard key={participation.id} participation={participation} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="ยังไม่มีกิจกรรมที่ลงทะเบียน" />
+              )}
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
     </div>
   )
 }
 
-function ActivityCard({ participation }: { participation: typeof mockParticipations[0] & { activity: typeof mockActivities[0] | undefined } }) {
+function ActivityCard({ participation }: { participation: Participation }) {
   const { activity } = participation
   if (!activity) return null
 
@@ -158,11 +228,11 @@ function ActivityCard({ participation }: { participation: typeof mockParticipati
           {/* Activity Info */}
           <div className="flex-1 p-4">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <Link 
-                href={`/clubs/${activity.clubId}`}
+              <Link
+                href={`/clubs/${activity.club?.id}`}
                 className="text-sm text-primary hover:underline"
               >
-                {activity.clubName}
+                {activity.club?.name}
               </Link>
               <Badge className={cn("text-xs", statusConfig.color, "bg-transparent")}>
                 <StatusIcon className="h-3 w-3 mr-1" />

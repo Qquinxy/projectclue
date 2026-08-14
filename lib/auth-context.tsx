@@ -1,15 +1,22 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react"
+
 import { Student } from "./types"
-import { mockStudents } from "./mock-data"
+import { api } from "./api"
 
 interface AuthContextType {
   user: Student | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<boolean>
   register: (data: RegisterData) => Promise<boolean>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 interface RegisterData {
@@ -23,62 +30,110 @@ interface RegisterData {
   year: number
 }
 
+interface AuthResponse {
+  success: boolean
+  message: string
+  data: {
+    user: Student
+  }
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Student | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Check existing login session
   useEffect(() => {
-    const savedUser = localStorage.getItem("user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
+    const checkAuth = async () => {
+      try {
+        const response = await api<AuthResponse>("/auth/me")
+
+        if (response.success && response.data?.user) {
+          setUser(response.data.user)
+        }
+      } catch {
+        setUser(null)
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    checkAuth()
   }, [])
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    const foundUser = mockStudents.find(s => s.email === email)
-    if (foundUser && password === "password123") {
-      setUser(foundUser)
-      localStorage.setItem("user", JSON.stringify(foundUser))
-      return true
+  // Login
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<boolean> => {
+    try {
+      const response = await api<AuthResponse>("/auth/login", {
+        method: "POST",
+        body: {
+          email,
+          password,
+        },
+      })
+
+      if (response.success && response.data?.user) {
+        setUser(response.data.user)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Login error:", error)
+      return false
     }
-    return false
   }
 
-  const register = async (data: RegisterData): Promise<boolean> => {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    const newUser: Student = {
-      id: `student-${Date.now()}`,
-      studentId: data.studentId,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      faculty: data.faculty,
-      major: data.major,
-      year: data.year,
-      joinedClubs: [],
-      registeredActivities: [],
-      volunteerHours: 0,
-      createdAt: new Date().toISOString(),
+  // Register
+  const register = async (
+    data: RegisterData
+  ): Promise<boolean> => {
+    try {
+      const response = await api<AuthResponse>("/auth/register", {
+        method: "POST",
+        body: data,
+      })
+
+      if (response.success && response.data?.user) {
+        setUser(response.data.user)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Register error:", error)
+      return false
     }
-    
-    setUser(newUser)
-    localStorage.setItem("user", JSON.stringify(newUser))
-    return true
   }
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem("user")
+  // Logout
+  const logout = async (): Promise<void> => {
+    try {
+      await api("/auth/logout", {
+        method: "POST",
+      })
+    } catch (error) {
+      console.error("Logout error:", error)
+    } finally {
+      setUser(null)
+    }
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
@@ -86,8 +141,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
+
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
+
   return context
 }
