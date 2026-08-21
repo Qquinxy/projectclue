@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { api } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { CLUB_CATEGORIES, type Club, type ClubCategory } from "@/lib/types"
 import {
   Search,
@@ -139,6 +140,10 @@ function buildClubPayload(form: ClubFormState) {
 }
 
 export default function AdminClubsPage() {
+  const { user } = useAuth()
+  const isClubAdmin = user?.role === "club_admin"
+  const managedClubIds = new Set(user?.managedClubs ?? [])
+
   const [searchQuery, setSearchQuery] = useState("")
   const [clubs, setClubs] = useState<Club[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -241,6 +246,12 @@ export default function AdminClubsPage() {
     form.maxMembers.trim() !== "" &&
     Number(form.maxMembers) > 0
 
+  // GET /clubs is not role-filtered server-side, so club admins only see
+  // clubs they manage by scoping the list here.
+  const visibleClubs = isClubAdmin
+    ? clubs.filter((club) => managedClubIds.has(club.id))
+    : clubs
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -248,10 +259,12 @@ export default function AdminClubsPage() {
           <h1 className="text-2xl font-bold text-foreground">จัดการชมรม</h1>
           <p className="text-muted-foreground">เพิ่ม แก้ไข และลบข้อมูลชมรม</p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          เพิ่มชมรมใหม่
-        </Button>
+        {!isClubAdmin && (
+          <Button onClick={openCreateDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            เพิ่มชมรมใหม่
+          </Button>
+        )}
       </div>
 
       {/* Search & Filter */}
@@ -276,7 +289,7 @@ export default function AdminClubsPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            รายชื่อชมรม (<span className="numeric-font">{clubs.length}</span>)
+            รายชื่อชมรม (<span className="numeric-font">{visibleClubs.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -303,7 +316,7 @@ export default function AdminClubsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clubs.map((club) => {
+                  {visibleClubs.map((club) => {
                     const category = CLUB_CATEGORIES.find(c => c.value === club.category)
                     const isFull = club.memberCount >= club.maxMembers
 
@@ -357,14 +370,16 @@ export default function AdminClubsPage() {
                             <Button variant="ghost" size="icon" onClick={() => openEditDialog(club)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(club.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!isClubAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(club.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -372,7 +387,7 @@ export default function AdminClubsPage() {
                   })}
                 </TableBody>
               </Table>
-              {clubs.length === 0 && (
+              {visibleClubs.length === 0 && (
                 <div className="text-center py-12">
                   <Users className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                   <p className="text-muted-foreground">ไม่พบชมรม</p>
