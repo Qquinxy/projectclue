@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
-import { Users } from "lucide-react"
+import { Users, AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -36,16 +36,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="relative min-h-screen overflow-hidden flex items-center justify-center bg-background p-4">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(107,62,0,0.08),transparent_60%)]"
+      />
+      <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <Link href="/" className="flex items-center justify-center gap-2 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Users className="h-5 w-5 text-primary-foreground" />
+          <Link href="/" className="flex items-center justify-center gap-2 mb-5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6b3e00] shadow-md">
+              <Users className="h-6 w-6 text-white" />
             </div>
           </Link>
-          <CardTitle className="text-2xl">เข้าสู่ระบบ</CardTitle>
-          <CardDescription>เข้าสู่ระบบเพื่อจัดการชมรมและกิจกรรม</CardDescription>
+          <CardTitle className="text-2xl sm:text-3xl tracking-tight">เข้าสู่ระบบ</CardTitle>
+          <CardDescription className="text-sm sm:text-base">
+            เข้าสู่ระบบเพื่อจัดการชมรมและกิจกรรม
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
@@ -74,19 +80,24 @@ export default function LoginPage() {
               </Field>
             </FieldGroup>
 
-            {error && (
-              <p className="text-sm text-destructive mt-4">{error}</p>
-            )}
+            <div className="mt-6 flex flex-col gap-4">
+              {error && (
+                <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            <Button type="submit" className="w-full mt-6" disabled={isLoading}>
-              {isLoading ? <Spinner className="mr-2" /> : null}
-              เข้าสู่ระบบ
-            </Button>
+              <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                {isLoading ? <Spinner className="mr-2" /> : null}
+                เข้าสู่ระบบ
+              </Button>
+            </div>
           </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+          <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
             ยังไม่มีบัญชี?{" "}
-            <Link href="/register" className="text-primary hover:underline">
+            <Link href="/register" className="text-primary font-medium hover:underline">
               สมัครสมาชิก
             </Link>
           </div>

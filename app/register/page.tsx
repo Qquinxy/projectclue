@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
-import { Users } from "lucide-react"
+import { Users, AlertCircle } from "lucide-react"
 
 const faculties = [
   "คณะวิศวกรรมศาสตร์",
@@ -90,16 +90,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 py-8">
-      <Card className="w-full max-w-md">
+    <div className="relative min-h-screen overflow-hidden flex items-center justify-center bg-background p-4 py-10 sm:py-12">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(107,62,0,0.08),transparent_60%)]"
+      />
+      <Card className="w-full max-w-xl shadow-lg">
         <CardHeader className="text-center">
-          <Link href="/" className="flex items-center justify-center gap-2 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Users className="h-5 w-5 text-primary-foreground" />
+          <Link href="/" className="flex items-center justify-center gap-2 mb-5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6b3e00] shadow-md">
+              <Users className="h-6 w-6 text-white" />
             </div>
           </Link>
-          <CardTitle className="text-2xl">สมัครสมาชิก</CardTitle>
-          <CardDescription>สร้างบัญชีเพื่อเข้าร่วมชมรมและกิจกรรม</CardDescription>
+          <CardTitle className="text-2xl sm:text-3xl tracking-tight">สมัครสมาชิก</CardTitle>
+          <CardDescription className="text-sm sm:text-base">
+            สร้างบัญชีเพื่อเข้าร่วมชมรมและกิจกรรม
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
@@ -115,7 +121,7 @@ export default function RegisterPage() {
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="firstName">ชื่อ</FieldLabel>
                   <Input
@@ -161,7 +167,7 @@ export default function RegisterPage() {
                 </Select>
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="major">สาขา</FieldLabel>
                   <Input
@@ -186,42 +192,49 @@ export default function RegisterPage() {
                 </Field>
               </div>
 
-              <Field>
-                <FieldLabel htmlFor="password">รหัสผ่าน</FieldLabel>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="อย่างน้อย 6 ตัวอักษร"
-                  value={formData.password}
-                  onChange={(e) => handleChange("password", e.target.value)}
-                />
-              </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="password">รหัสผ่าน</FieldLabel>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="อย่างน้อย 6 ตัวอักษร"
+                    value={formData.password}
+                    onChange={(e) => handleChange("password", e.target.value)}
+                  />
+                </Field>
 
-              <Field>
-                <FieldLabel htmlFor="confirmPassword">ยืนยันรหัสผ่าน</FieldLabel>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="ยืนยันรหัสผ่าน"
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                />
-              </Field>
+                <Field>
+                  <FieldLabel htmlFor="confirmPassword">ยืนยันรหัสผ่าน</FieldLabel>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="ยืนยันรหัสผ่าน"
+                    value={formData.confirmPassword}
+                    onChange={(e) => handleChange("confirmPassword", e.target.value)}
+                  />
+                </Field>
+              </div>
             </FieldGroup>
 
-            {error && (
-              <p className="text-sm text-destructive mt-4">{error}</p>
-            )}
+            <div className="mt-6 flex flex-col gap-4">
+              {error && (
+                <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            <Button type="submit" className="w-full mt-6" disabled={isLoading}>
-              {isLoading ? <Spinner className="mr-2" /> : null}
-              สมัครสมาชิก
-            </Button>
+              <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                {isLoading ? <Spinner className="mr-2" /> : null}
+                สมัครสมาชิก
+              </Button>
+            </div>
           </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+          <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
             มีบัญชีอยู่แล้ว?{" "}
-            <Link href="/login" className="text-primary hover:underline">
+            <Link href="/login" className="text-primary font-medium hover:underline">
               เข้าสู่ระบบ
             </Link>
           </div>
