@@ -1,43 +1,79 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { ClubCard } from "@/components/club-card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { mockClubs } from "@/lib/mock-data"
-import { CLUB_CATEGORIES, type ClubCategory } from "@/lib/types"
-import { Search, Users } from "lucide-react"
+import { api } from "@/lib/api"
+import { CLUB_CATEGORIES, type Club, type ClubCategory } from "@/lib/types"
+import { Search, Users, Loader2, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const TOTAL_CLUBS = mockClubs.length
+interface RawClub extends Omit<Club, "id"> {
+  id?: string
+  _id?: string
+}
+
+interface ClubsResponse {
+  success: boolean
+  message?: string
+  data: {
+    clubs: RawClub[]
+  }
+}
+
+// The API returns MongoDB documents keyed by _id, not id — normalize here
+// so the rest of the page (and ClubCard's /clubs/:id link) gets a real id.
+function normalizeClub(club: RawClub): Club {
+  return { ...club, id: club.id ?? club._id ?? "" }
+}
 
 export default function ClubsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<ClubCategory | "all">("all")
+  const [clubs, setClubs] = useState<Club[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // How many clubs sit in each category, so the filter chips can show a count
-  // and users can pick a category instead of scrolling the full list.
-  const categoryCounts = useMemo(() => {
-    return mockClubs.reduce<Record<string, number>>((acc, club) => {
-      acc[club.category] = (acc[club.category] ?? 0) + 1
-      return acc
-    }, {})
-  }, [])
+  useEffect(() => {
+    const controller = new AbortController()
 
-  const filteredClubs = useMemo(() => {
-    return mockClubs.filter((club) => {
-      const matchesSearch = 
-        club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        club.description.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchesCategory = 
-        selectedCategory === "all" || club.category === selectedCategory
+    const fetchClubs = async () => {
+      setIsLoading(true)
+      setError(null)
 
-      return matchesSearch && matchesCategory
-    })
+      try {
+        const params = new URLSearchParams()
+        if (searchQuery) params.set("search", searchQuery)
+        if (selectedCategory !== "all") params.set("category", selectedCategory)
+
+        const query = params.toString()
+        const response = await api<ClubsResponse>(
+          `/clubs${query ? `?${query}` : ""}`,
+          { signal: controller.signal }
+        )
+        setClubs((response.data?.clubs ?? []).map(normalizeClub))
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดรายชื่อชมรมได้")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    const timeout = setTimeout(fetchClubs, 300)
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
   }, [searchQuery, selectedCategory])
+
+  const categoryCounts = clubs.reduce<Record<string, number>>((acc, club) => {
+    acc[club.category] = (acc[club.category] ?? 0) + 1
+    return acc
+  }, {})
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -57,7 +93,7 @@ export default function ClubsPage() {
                 ชมรมทั้งหมด
               </h1>
               <p className="text-muted-foreground mb-8">
-                ค้นหาและเข้าร่วมชมรมที่คุณสนใจ จากกว่า <span className="numeric-font">{TOTAL_CLUBS}</span> ชมรมในมหาวิทยาลัย
+                ค้นหาและเข้าร่วมชมรมที่คุณสนใจ
               </p>
 
               {/* Search */}
@@ -85,7 +121,7 @@ export default function ClubsPage() {
                 onClick={() => setSelectedCategory("all")}
               >
                 ทั้งหมด
-                <span className="numeric-font ml-1.5 opacity-70">{mockClubs.length}</span>
+                <span className="numeric-font ml-1.5 opacity-70">{clubs.length}</span>
               </Badge>
               {CLUB_CATEGORIES.map((category) => (
                 <Badge
@@ -110,13 +146,25 @@ export default function ClubsPage() {
         {/* Clubs Grid */}
         <section className="py-12">
           <div className="container mx-auto px-4">
-            {filteredClubs.length > 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-24">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="text-center py-16">
+                <AlertCircle className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  เกิดข้อผิดพลาด
+                </h3>
+                <p className="text-muted-foreground">{error}</p>
+              </div>
+            ) : clubs.length > 0 ? (
               <>
                 <p className="text-muted-foreground mb-6">
-                  แสดง <span className="numeric-font">{filteredClubs.length}</span> ชมรม
+                  แสดง <span className="numeric-font">{clubs.length}</span> ชมรม
                 </p>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredClubs.map((club) => (
+                  {clubs.map((club) => (
                     <ClubCard key={club.id} club={club} />
                   ))}
                 </div>

@@ -47,7 +47,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
               )}
             </div>
           </div>
-          <p className="text-xs text-primary mb-1">{activity.clubName}</p>
+          <p className="text-xs text-primary mb-1">{activity.club.name}</p>
           <h3 className="font-medium text-foreground mb-1 line-clamp-1">
             {activity.title}
           </h3>

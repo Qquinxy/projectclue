@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import { Noto_Sans_Thai, Geist_Mono } from 'next/font/google'
+import { Kanit, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import './globals.css'
 
-const notoSansThai = Noto_Sans_Thai({ 
+const kanit = Kanit({
   subsets: ["thai", "latin"],
   variable: "--font-sans",
   weight: ["300", "400", "500", "600", "700"],
@@ -41,7 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body className={`${notoSansThai.variable} font-sans antialiased`}>
+      <body className={`${kanit.variable} font-sans antialiased`}>
         <AuthProvider>
           {children}
         </AuthProvider>

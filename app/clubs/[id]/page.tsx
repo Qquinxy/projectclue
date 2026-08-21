@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Navbar } from "@/components/navbar"
@@ -10,51 +10,195 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ActivityCard } from "@/components/activity-card"
-import { mockClubs, mockActivities, mockMemberships, getCurrentStudent } from "@/lib/mock-data"
-import { CLUB_CATEGORIES } from "@/lib/types"
-import { 
-  Users, 
-  MapPin, 
-  Clock, 
-  Mail, 
-  Phone, 
-  User, 
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
+import { CLUB_CATEGORIES, type Club, type Activity } from "@/lib/types"
+import {
+  Users,
+  MapPin,
+  Clock,
+  Mail,
+  Phone,
+  User,
   CheckCircle,
   ArrowLeft,
   Calendar,
-  Award
+  Award,
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+interface RawClub extends Omit<Club, "id"> {
+  id?: string
+  _id?: string
+}
+
+interface ClubResponse {
+  success: boolean
+  message?: string
+  data: {
+    club: RawClub
+  }
+}
+
+interface RawActivity extends Omit<Activity, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Activity["club"], "id"> & { id?: string; _id?: string }
+}
+
+interface ActivitiesResponse {
+  success: boolean
+  message?: string
+  data: {
+    activities: RawActivity[]
+  }
+}
+
+// The API returns activities (and their populated club) keyed by _id, not id —
+// normalize here so ActivityCard's /activities/:id link gets a real id.
+function normalizeActivity(activity: RawActivity): Activity {
+  return {
+    ...activity,
+    id: activity.id ?? activity._id ?? "",
+    club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+  }
+}
+
+interface ClubsMeResponse {
+  success: boolean
+  message?: string
+  data: {
+    memberships: { club: { id?: string; _id?: string } }[]
+  }
+}
+
+// The API returns MongoDB documents keyed by _id, not id — normalize here
+// so join/leave, the membership check, and links on this page use a real id.
+function normalizeClub(club: RawClub): Club {
+  return { ...club, id: club.id ?? club._id ?? "" }
+}
+
 export default function ClubDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const club = mockClubs.find((c) => c.id === id)
-  const [isRegistering, setIsRegistering] = useState(false)
-  const [isRegistered, setIsRegistered] = useState(false)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const { user, isLoading: isAuthLoading } = useAuth()
 
-  if (!club) {
+  const [club, setClub] = useState<Club | null>(null)
+  const [clubActivities, setClubActivities] = useState<Activity[]>([])
+  const [isMember, setIsMember] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [notFoundError, setNotFoundError] = useState(false)
+
+  const [isJoining, setIsJoining] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const fetchClub = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    setNotFoundError(false)
+
+    try {
+      const [clubRes, activitiesRes] = await Promise.all([
+        api<ClubResponse>(`/clubs/${id}`),
+        api<ActivitiesResponse>(`/activities?club=${id}&status=upcoming`),
+      ])
+
+      setClub(clubRes.data?.club ? normalizeClub(clubRes.data.club) : null)
+      setClubActivities((activitiesRes.data?.activities ?? []).map(normalizeActivity))
+
+      // /students/me/clubs is student-only — admins/superadmins viewing a
+      // club aren't members, so skip the call rather than triggering a 403.
+      if (user && user.role === "student") {
+        try {
+          const membershipsRes = await api<ClubsMeResponse>("/students/me/clubs")
+          const memberships = membershipsRes.data?.memberships ?? []
+          setIsMember(
+            memberships.some((m) => (m.club?.id ?? m.club?._id) === id)
+          )
+        } catch {
+          setIsMember(false)
+        }
+      } else {
+        setIsMember(false)
+      }
+    } catch (err) {
+      if (err instanceof Error && /not ?found/i.test(err.message)) {
+        setNotFoundError(true)
+      } else {
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลชมรมได้")
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [id, user])
+
+  useEffect(() => {
+    if (isAuthLoading) return
+    fetchClub()
+  }, [fetchClub, isAuthLoading])
+
+  if (notFoundError) {
     notFound()
   }
 
-  const category = CLUB_CATEGORIES.find((c) => c.value === club.category)
-  const clubActivities = mockActivities.filter((a) => a.clubId === club.id && a.status === "upcoming")
-  const student = getCurrentStudent()
-
-  // Check if student is already a member
-  const existingMembership = mockMemberships.find(
-    (m) => m.studentId === student.id && m.clubId === club.id
-  )
-  const isMember = existingMembership !== undefined || isRegistered
-
-  const handleRegister = async () => {
-    setIsRegistering(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsRegistering(false)
-    setIsRegistered(true)
-    setDialogOpen(false)
+  const handleJoin = async () => {
+    setIsJoining(true)
+    setActionError(null)
+    try {
+      await api(`/clubs/${id}/join`, { method: "POST" })
+      setDialogOpen(false)
+      await fetchClub()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "ไม่สามารถสมัครเข้าร่วมชมรมได้")
+    } finally {
+      setIsJoining(false)
+    }
   }
+
+  const handleLeave = async () => {
+    setIsLeaving(true)
+    setActionError(null)
+    try {
+      await api(`/clubs/${id}/leave`, { method: "DELETE" })
+      await fetchClub()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "ไม่สามารถออกจากชมรมได้")
+    } finally {
+      setIsLeaving(false)
+    }
+  }
+
+  if (isLoading || isAuthLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (error || !club) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
+        <main className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-4">
+          <AlertCircle className="h-12 w-12 text-muted-foreground/40" />
+          <p className="text-muted-foreground">{error ?? "ไม่พบข้อมูลชมรม"}</p>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  const category = CLUB_CATEGORIES.find((c) => c.value === club.category)
+  const isFull = club.memberCount >= club.maxMembers
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -64,8 +208,8 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
         {/* Header */}
         <section className="bg-gradient-to-br from-primary/10 via-background to-accent/10 py-8">
           <div className="container mx-auto px-4">
-            <Link 
-              href="/clubs" 
+            <Link
+              href="/clubs"
               className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -75,9 +219,6 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Club Image */}
               <div className="lg:w-1/3">
-                {/* Reserved club-image area. Intentionally empty — no photo,
-                    no external image — so the layout keeps its space until
-                    real club photography is supplied. */}
                 <div
                   aria-hidden
                   className="relative aspect-video lg:aspect-square rounded-xl border border-dashed border-[#d8d0bd] bg-gradient-to-br from-primary/10 to-accent/10"
@@ -87,7 +228,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
               {/* Club Info */}
               <div className="lg:w-2/3">
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <Badge 
+                  <Badge
                     className={cn("text-sm text-primary-foreground", category?.color)}
                   >
                     {category?.label}
@@ -149,7 +290,17 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 </div>
 
-                {!isMember && club.memberCount < club.maxMembers && (
+                {actionError && (
+                  <p className="text-sm text-destructive mb-4">{actionError}</p>
+                )}
+
+                {!user && (
+                  <Button asChild size="lg" className="text-base">
+                    <Link href="/login">เข้าสู่ระบบเพื่อสมัครเข้าร่วมชมรม</Link>
+                  </Button>
+                )}
+
+                {user && !isMember && !isFull && (
                   <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
                       <Button size="lg" className="text-base">
@@ -167,15 +318,15 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                         <div className="p-4 bg-muted rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">รหัสนักศึกษา:</span>
-                            <span className="numeric-font font-medium">{student.studentId}</span>
+                            <span className="numeric-font font-medium">{user.studentId}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">ชื่อ-นามสกุล:</span>
-                            <span className="font-medium">{student.firstName} {student.lastName}</span>
+                            <span className="font-medium">{user.firstName} {user.lastName}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">คณะ:</span>
-                            <span className="font-medium">{student.faculty}</span>
+                            <span className="font-medium">{user.faculty}</span>
                           </div>
                         </div>
                       </div>
@@ -183,18 +334,24 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                         <Button variant="outline" onClick={() => setDialogOpen(false)}>
                           ยกเลิก
                         </Button>
-                        <Button onClick={handleRegister} disabled={isRegistering}>
-                          {isRegistering ? "กำลังสมัคร..." : "ยืนยันการสมัคร"}
+                        <Button onClick={handleJoin} disabled={isJoining}>
+                          {isJoining ? "กำลังสมัคร..." : "ยืนยันการสมัคร"}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 )}
 
-                {isMember && (
-                  <Button size="lg" variant="secondary" disabled>
+                {user && isMember && (
+                  <Button size="lg" variant="secondary" onClick={handleLeave} disabled={isLeaving}>
                     <CheckCircle className="h-5 w-5 mr-2" />
-                    คุณเป็นสมาชิกแล้ว
+                    {isLeaving ? "กำลังออกจากชมรม..." : "ออกจากชมรม"}
+                  </Button>
+                )}
+
+                {user && !isMember && isFull && (
+                  <Button size="lg" variant="secondary" disabled>
+                    ชมรมเต็มแล้ว
                   </Button>
                 )}
               </div>
@@ -209,38 +366,42 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-8">
                 {/* Requirements */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-xl">คุณสมบัติผู้สมัคร</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2">
-                      {club.requirements.map((req, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                          <span className="text-muted-foreground">{req}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
+                {club.requirements.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-xl">คุณสมบัติผู้สมัคร</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {club.requirements.map((req, index) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                            <span className="text-muted-foreground">{req}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Benefits */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-xl">สิทธิประโยชน์</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2">
-                      {club.benefits.map((benefit, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <Award className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                          <span className="text-muted-foreground">{benefit}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
+                {club.benefits.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-xl">สิทธิประโยชน์</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {club.benefits.map((benefit, index) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <Award className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                            <span className="text-muted-foreground">{benefit}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Club Activities */}
                 {clubActivities.length > 0 && (
@@ -267,7 +428,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                   <CardContent className="space-y-4">
                     <div className="flex items-center gap-3">
                       <Mail className="h-5 w-5 text-primary" />
-                      <a 
+                      <a
                         href={`mailto:${club.contactEmail}`}
                         className="text-muted-foreground hover:text-foreground transition-colors"
                       >
@@ -311,13 +472,13 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-muted-foreground">ที่ว่าง</span>
                         <span>
-                          <span className="numeric-font">{club.maxMembers - club.memberCount}</span> ที่
+                          <span className="numeric-font">{Math.max(0, club.maxMembers - club.memberCount)}</span> ที่
                         </span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${(club.memberCount / club.maxMembers) * 100}%` }}
+                          style={{ width: `${Math.min(100, (club.memberCount / club.maxMembers) * 100)}%` }}
                         />
                       </div>
                     </div>

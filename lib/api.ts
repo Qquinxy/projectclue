@@ -4,7 +4,7 @@ if (!API_URL) {
   throw new Error("NEXT_PUBLIC_API_URL is not defined")
 }
 
-type ApiOptions = RequestInit & {
+type ApiOptions = Omit<RequestInit, "body"> & {
   body?: unknown
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Navbar } from "@/components/navbar"
@@ -9,18 +9,20 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { mockActivities, mockParticipations, getCurrentStudent } from "@/lib/mock-data"
-import { ACTIVITY_TYPES } from "@/lib/types"
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  Users, 
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
+import { ACTIVITY_TYPES, type Activity } from "@/lib/types"
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
   Award,
   ArrowLeft,
   CheckCircle,
   Info,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -38,38 +40,149 @@ const statusLabels = {
   cancelled: "ยกเลิก",
 }
 
+interface RawActivity extends Omit<Activity, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Activity["club"], "id"> & { id?: string; _id?: string }
+}
+
+interface ActivityResponse {
+  success: boolean
+  message?: string
+  data: {
+    activity: RawActivity
+  }
+}
+
+// The API returns the activity (and its populated club) keyed by _id, not id —
+// normalize here so the "back to club" links on this page get a real id.
+function normalizeActivity(activity: RawActivity): Activity {
+  return {
+    ...activity,
+    id: activity.id ?? activity._id ?? "",
+    club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+  }
+}
+
+interface ActivitiesMeResponse {
+  success: boolean
+  message?: string
+  data: {
+    participations: { status: string; activity: { id?: string; _id?: string } }[]
+  }
+}
+
 export default function ActivityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const activity = mockActivities.find((a) => a.id === id)
-  const [isRegistering, setIsRegistering] = useState(false)
-  const [isRegistered, setIsRegistered] = useState(false)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const { user, isLoading: isAuthLoading } = useAuth()
 
-  if (!activity) {
+  const [activity, setActivity] = useState<Activity | null>(null)
+  const [hasRegistered, setHasRegistered] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [notFoundError, setNotFoundError] = useState(false)
+
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const fetchActivity = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    setNotFoundError(false)
+
+    try {
+      const activityRes = await api<ActivityResponse>(`/activities/${id}`)
+      setActivity(activityRes.data?.activity ? normalizeActivity(activityRes.data.activity) : null)
+
+      if (user) {
+        const participationsRes = await api<ActivitiesMeResponse>("/students/me/activities")
+        const participations = participationsRes.data?.participations ?? []
+        setHasRegistered(
+          participations.some(
+            (p) => (p.activity?.id ?? p.activity?._id) === id && p.status === "registered"
+          )
+        )
+      } else {
+        setHasRegistered(false)
+      }
+    } catch (err) {
+      if (err instanceof Error && /not ?found/i.test(err.message)) {
+        setNotFoundError(true)
+      } else {
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลกิจกรรมได้")
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [id, user])
+
+  useEffect(() => {
+    if (isAuthLoading) return
+    fetchActivity()
+  }, [fetchActivity, isAuthLoading])
+
+  if (notFoundError) {
     notFound()
   }
 
-  const activityType = ACTIVITY_TYPES.find((t) => t.value === activity.type)
-  const student = getCurrentStudent()
-  const spotsLeft = activity.maxParticipants - activity.currentParticipants
-  const isFull = spotsLeft <= 0
-
-  // Check if student is already registered
-  const existingParticipation = mockParticipations.find(
-    (p) => p.studentId === student.id && p.activityId === activity.id
-  )
-  const hasRegistered = existingParticipation !== undefined || isRegistered
-
   const handleRegister = async () => {
     setIsRegistering(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsRegistering(false)
-    setIsRegistered(true)
-    setDialogOpen(false)
+    setActionError(null)
+    try {
+      await api(`/activities/${id}/register`, { method: "POST" })
+      setDialogOpen(false)
+      await fetchActivity()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "ไม่สามารถลงทะเบียนได้")
+    } finally {
+      setIsRegistering(false)
+    }
   }
 
-  const canRegister = activity.status === "upcoming" && !isFull && !hasRegistered
+  const handleCancel = async () => {
+    setIsCancelling(true)
+    setActionError(null)
+    try {
+      await api(`/activities/${id}/register`, { method: "DELETE" })
+      await fetchActivity()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "ไม่สามารถยกเลิกการลงทะเบียนได้")
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  if (isLoading || isAuthLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (error || !activity) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
+        <main className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-4">
+          <AlertCircle className="h-12 w-12 text-muted-foreground/40" />
+          <p className="text-muted-foreground">{error ?? "ไม่พบข้อมูลกิจกรรม"}</p>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  const activityType = ACTIVITY_TYPES.find((t) => t.value === activity.type)
+  const spotsLeft = activity.maxParticipants - activity.currentParticipants
+  const isFull = spotsLeft <= 0
+  const canRegister = !!user && activity.status === "upcoming" && !isFull && !hasRegistered
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -79,8 +192,8 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
         {/* Header */}
         <section className="bg-gradient-to-br from-accent/10 via-background to-primary/10 py-8">
           <div className="container mx-auto px-4">
-            <Link 
-              href="/activities" 
+            <Link
+              href="/activities"
               className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -111,11 +224,11 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
               {/* Activity Info */}
               <div className="lg:w-2/3">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <Link 
-                    href={`/clubs/${activity.clubId}`}
+                  <Link
+                    href={`/clubs/${activity.club.id}`}
                     className="text-primary hover:underline text-sm font-medium"
                   >
-                    {activity.clubName}
+                    {activity.club.name}
                   </Link>
                   <Badge variant="outline" className="text-xs">
                     {activityType?.label}
@@ -188,6 +301,16 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                   </div>
                 </div>
 
+                {actionError && (
+                  <p className="text-sm text-destructive mb-4">{actionError}</p>
+                )}
+
+                {!user && activity.status === "upcoming" && !isFull && (
+                  <Button asChild size="lg" className="text-base">
+                    <Link href="/login">เข้าสู่ระบบเพื่อลงทะเบียน</Link>
+                  </Button>
+                )}
+
                 {canRegister && (
                   <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
@@ -206,11 +329,11 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                         <div className="p-4 bg-muted rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">รหัสนักศึกษา:</span>
-                            <span className="numeric-font font-medium">{student.studentId}</span>
+                            <span className="numeric-font font-medium">{user?.studentId}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">ชื่อ-นามสกุล:</span>
-                            <span className="font-medium">{student.firstName} {student.lastName}</span>
+                            <span className="font-medium">{user?.firstName} {user?.lastName}</span>
                           </div>
                         </div>
                         {activity.volunteerHours > 0 && (
@@ -238,9 +361,9 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                 )}
 
                 {hasRegistered && (
-                  <Button size="lg" variant="secondary" disabled>
+                  <Button size="lg" variant="secondary" onClick={handleCancel} disabled={isCancelling}>
                     <CheckCircle className="h-5 w-5 mr-2" />
-                    คุณลงทะเบียนแล้ว
+                    {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกการลงทะเบียน"}
                   </Button>
                 )}
 
@@ -297,7 +420,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                   <CardContent className="prose prose-sm max-w-none text-muted-foreground">
                     <p>{activity.description}</p>
                     <p>
-                      กิจกรรมนี้จัดโดย <strong>{activity.clubName}</strong> 
+                      กิจกรรมนี้จัดโดย <strong>{activity.club.name}</strong>
                       {activity.volunteerHours > 0 && (
                         <> ผู้เข้าร่วมจะได้รับชั่วโมงจิตอาสา <strong><span className="numeric-font">{activity.volunteerHours}</span> ชั่วโมง</strong></>
                       )}
@@ -334,15 +457,15 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     <div className="pt-2">
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-muted-foreground">ที่ว่าง</span>
-                        <span>{spotsLeft} ที่</span>
+                        <span className="numeric-font">{Math.max(0, spotsLeft)} ที่</span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={cn(
                             "h-full rounded-full transition-all",
                             isFull ? "bg-destructive" : "bg-primary"
                           )}
-                          style={{ width: `${(activity.currentParticipants / activity.maxParticipants) * 100}%` }}
+                          style={{ width: `${Math.min(100, (activity.currentParticipants / activity.maxParticipants) * 100)}%` }}
                         />
                       </div>
                     </div>
@@ -354,15 +477,15 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     <CardTitle className="text-lg">จัดโดย</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Link 
-                      href={`/clubs/${activity.clubId}`}
+                    <Link
+                      href={`/clubs/${activity.club.id}`}
                       className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                     >
                       <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Users className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <div className="font-medium text-foreground">{activity.clubName}</div>
+                        <div className="font-medium text-foreground">{activity.club.name}</div>
                         <div className="text-sm text-muted-foreground">ดูรายละเอียดชมรม</div>
                       </div>
                     </Link>

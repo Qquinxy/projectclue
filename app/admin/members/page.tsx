@@ -1,11 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Table,
   TableBody,
@@ -15,114 +13,152 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { mockMemberships, mockStudents, mockClubs } from "@/lib/mock-data"
-import { MEMBER_ROLES, type MembershipStatus } from "@/lib/types"
-import { 
-  Search, 
-  UserCheck,
-  CheckCircle,
-  XCircle,
-  Clock
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { api } from "@/lib/api"
+import type { Club } from "@/lib/types"
+import { Search, UserCheck, Loader2, AlertCircle } from "lucide-react"
 
-const statusConfig = {
-  pending: { label: "รอการอนุมัติ", color: "bg-accent/10 text-accent", icon: Clock },
-  active: { label: "ใช้งาน", color: "bg-primary/10 text-primary", icon: CheckCircle },
-  inactive: { label: "ไม่ใช้งาน", color: "bg-muted text-muted-foreground", icon: XCircle },
-  rejected: { label: "ปฏิเสธ", color: "bg-destructive/10 text-destructive", icon: XCircle },
+interface RawClub extends Omit<Club, "id"> {
+  id?: string
+  _id?: string
+}
+
+interface ClubsResponse {
+  success: boolean
+  message?: string
+  data: {
+    clubs: RawClub[]
+  }
+}
+
+// The API returns clubs/members keyed by _id, not id — normalize here so the
+// club selector and member list below use real ids.
+function normalizeClub(club: RawClub): Club {
+  return { ...club, id: club.id ?? club._id ?? "" }
+}
+
+interface ClubMember {
+  id: string
+  joinedAt: string
+  student: {
+    id: string
+    studentId: string
+    firstName: string
+    lastName: string
+  }
+}
+
+interface RawClubMember extends Omit<ClubMember, "id"> {
+  id?: string
+  _id?: string
+}
+
+interface ClubMembersResponse {
+  success: boolean
+  message?: string
+  data: {
+    members: RawClubMember[]
+  }
+}
+
+function normalizeMember(member: RawClubMember): ClubMember {
+  return { ...member, id: member.id ?? member._id ?? "" }
 }
 
 export default function AdminMembersPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<MembershipStatus | "all">("all")
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false)
-  const [selectedMembership, setSelectedMembership] = useState<string | null>(null)
-  const [actionType, setActionType] = useState<"approve" | "reject">("approve")
+  const [clubs, setClubs] = useState<Club[]>([])
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null)
+  const [members, setMembers] = useState<ClubMember[]>([])
+  const [isLoadingClubs, setIsLoadingClubs] = useState(true)
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Join memberships with student and club data
-  const membershipsWithDetails = mockMemberships.map((membership) => {
-    const student = mockStudents.find(s => s.id === membership.studentId)
-    const club = mockClubs.find(c => c.id === membership.clubId)
-    return { ...membership, student, club }
-  }).filter(m => m.student && m.club)
+  useEffect(() => {
+    const fetchClubs = async () => {
+      setIsLoadingClubs(true)
+      setError(null)
+      try {
+        const response = await api<ClubsResponse>("/clubs")
+        const list = (response.data?.clubs ?? []).map(normalizeClub)
+        setClubs(list)
+        setSelectedClubId((current) => current ?? list[0]?.id ?? null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดรายชื่อชมรมได้")
+      } finally {
+        setIsLoadingClubs(false)
+      }
+    }
 
-  const filteredMemberships = membershipsWithDetails.filter((membership) => {
-    const matchesSearch = 
-      membership.student?.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      membership.student?.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      membership.student?.studentId.includes(searchQuery) ||
-      membership.club?.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || membership.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+    fetchClubs()
+  }, [])
 
-  const pendingCount = membershipsWithDetails.filter(m => m.status === "pending").length
+  const fetchMembers = useCallback(async (clubId: string) => {
+    setIsLoadingMembers(true)
+    setError(null)
+    try {
+      const response = await api<ClubMembersResponse>(`/clubs/${clubId}/members`)
+      setMembers((response.data?.members ?? []).map(normalizeMember))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถโหลดรายชื่อสมาชิกได้")
+    } finally {
+      setIsLoadingMembers(false)
+    }
+  }, [])
 
-  const handleAction = (membershipId: string, action: "approve" | "reject") => {
-    setSelectedMembership(membershipId)
-    setActionType(action)
-    setApproveDialogOpen(true)
-  }
+  useEffect(() => {
+    if (selectedClubId) {
+      fetchMembers(selectedClubId)
+    }
+  }, [selectedClubId, fetchMembers])
 
-  const confirmAction = () => {
-    // In real app, this would call an API
-    setApproveDialogOpen(false)
-    setSelectedMembership(null)
-  }
+  const filteredMembers = members.filter((member) =>
+    member.student.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    member.student.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    member.student.studentId.includes(searchQuery)
+  )
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">จัดการสมาชิก</h1>
-          <p className="text-muted-foreground">อนุมัติและจัดการสมาชิกชมรม</p>
-        </div>
-        {pendingCount > 0 && (
-          <Badge variant="secondary" className="gap-2">
-            <Clock className="h-4 w-4" />
-            {pendingCount} คำขอรอการอนุมัติ
-          </Badge>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">จัดการสมาชิก</h1>
+        <p className="text-muted-foreground">ดูรายชื่อสมาชิกของแต่ละชมรม</p>
       </div>
 
-      {/* Status Tabs */}
-      <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as MembershipStatus | "all")}>
-        <TabsList>
-          <TabsTrigger value="all">ทั้งหมด</TabsTrigger>
-          <TabsTrigger value="pending" className="gap-2">
-            รอการอนุมัติ
-            {pendingCount > 0 && (
-              <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
-                {pendingCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="active">ใช้งาน</TabsTrigger>
-          <TabsTrigger value="inactive">ไม่ใช้งาน</TabsTrigger>
-          <TabsTrigger value="rejected">ปฏิเสธ</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Search */}
+      {/* Club selector & search */}
       <Card>
         <CardContent className="p-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="ค้นหาสมาชิก..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-col md:flex-row gap-4">
+            <Select
+              value={selectedClubId ?? undefined}
+              onValueChange={(value) => setSelectedClubId(value)}
+              disabled={isLoadingClubs || clubs.length === 0}
+            >
+              <SelectTrigger className="md:w-64">
+                <SelectValue placeholder="เลือกชมรม" />
+              </SelectTrigger>
+              <SelectContent>
+                {clubs.map((club) => (
+                  <SelectItem key={club.id} value={club.id}>
+                    {club.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="ค้นหาสมาชิก..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -132,140 +168,75 @@ export default function AdminMembersPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <UserCheck className="h-5 w-5 text-primary" />
-            รายชื่อสมาชิก (<span className="numeric-font">{filteredMemberships.length}</span>)
+            รายชื่อสมาชิก (<span className="numeric-font">{filteredMembers.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>นักศึกษา</TableHead>
-                  <TableHead>ชมรม</TableHead>
-                  <TableHead>ตำแหน่ง</TableHead>
-                  <TableHead>วันที่สมัคร</TableHead>
-                  <TableHead>สถานะ</TableHead>
-                  <TableHead className="text-right">การดำเนินการ</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMemberships.map((membership) => {
-                  const role = MEMBER_ROLES.find(r => r.value === membership.role)
-                  const status = statusConfig[membership.status]
-                  const StatusIcon = status.icon
-                  
-                  return (
-                    <TableRow key={membership.id}>
+          {error ? (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+              <p className="text-muted-foreground">{error}</p>
+            </div>
+          ) : isLoadingClubs || isLoadingMembers ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>นักศึกษา</TableHead>
+                    <TableHead>วันที่เข้าร่วม</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMembers.map((member) => (
+                    <TableRow key={member.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10">
                             <AvatarFallback className="bg-primary/10 text-primary">
-                              {membership.student?.firstName.charAt(0)}
+                              {member.student.firstName.charAt(0)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <div className="font-medium text-foreground">
-                              {membership.student?.firstName} {membership.student?.lastName}
+                              {member.student.firstName} {member.student.lastName}
                             </div>
                             <div className="numeric-font text-sm text-muted-foreground">
-                              {membership.student?.studentId}
+                              {member.student.studentId}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="text-foreground">{membership.club?.name}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{role?.label}</Badge>
-                      </TableCell>
                       <TableCell className="numeric-font text-muted-foreground">
-                        {new Date(membership.joinedAt).toLocaleDateString("th-TH", {
+                        {new Date(member.joinedAt).toLocaleDateString("th-TH", {
                           day: "numeric",
                           month: "short",
                           year: "numeric"
                         })}
                       </TableCell>
-                      <TableCell>
-                        <Badge className={cn("text-xs gap-1", status.color)}>
-                          <StatusIcon className="h-3 w-3" />
-                          {status.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          {membership.status === "pending" ? (
-                            <>
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleAction(membership.id, "approve")}
-                              >
-                                <CheckCircle className="mr-1 h-4 w-4" />
-                                อนุมัติ
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleAction(membership.id, "reject")}
-                              >
-                                <XCircle className="mr-1 h-4 w-4" />
-                                ปฏิเสธ
-                              </Button>
-                            </>
-                          ) : (
-                            <Button size="sm" variant="ghost">
-                              ดูรายละเอียด
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
 
-          {filteredMemberships.length === 0 && (
-            <div className="text-center py-12">
-              <UserCheck className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">
-                ไม่พบข้อมูลสมาชิก
-              </h3>
-              <p className="text-muted-foreground">
-                ลองเปลี่ยนตัวกรองหรือคำค้นหา
-              </p>
+              {filteredMembers.length === 0 && (
+                <div className="text-center py-12">
+                  <UserCheck className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    ไม่พบข้อมูลสมาชิก
+                  </h3>
+                  <p className="text-muted-foreground">
+                    ลองเปลี่ยนชมรมหรือคำค้นหา
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Approve/Reject Dialog */}
-      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {actionType === "approve" ? "ยืนยันการอนุมัติ" : "ยืนยันการปฏิเสธ"}
-            </DialogTitle>
-            <DialogDescription>
-              {actionType === "approve" 
-                ? "คุณต้องการอนุมัติคำขอสมัครสมาชิกนี้หรือไม่?"
-                : "คุณต้องการปฏิเสธคำขอสมัครสมาชิกนี้หรือไม่?"}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>
-              ยกเลิก
-            </Button>
-            <Button 
-              variant={actionType === "approve" ? "default" : "destructive"} 
-              onClick={confirmAction}
-            >
-              {actionType === "approve" ? "อนุมัติ" : "ปฏิเสธ"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

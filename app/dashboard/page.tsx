@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
-import { Club, Activity, VolunteerRecord } from "@/lib/types"
+import { Club, Activity } from "@/lib/types"
 import {
   Users,
   Calendar,
@@ -26,11 +26,27 @@ interface ClubMembershipItem {
   club: Club
 }
 
+interface RawClubMembershipItem extends Omit<ClubMembershipItem, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Club, "id"> & { id?: string; _id?: string }
+}
+
 interface ClubsMeResponse {
   success: boolean
   message?: string
   data: {
-    memberships: ClubMembershipItem[]
+    memberships: RawClubMembershipItem[]
+  }
+}
+
+// The API returns the joined club keyed by _id, not id — normalize here so
+// the "/clubs/:id" links below get a real id, consistent with app/clubs/page.tsx.
+function normalizeMembership(membership: RawClubMembershipItem): ClubMembershipItem {
+  return {
+    ...membership,
+    id: membership.id ?? membership._id ?? "",
+    club: { ...membership.club, id: membership.club.id ?? membership.club._id ?? "" },
   }
 }
 
@@ -43,18 +59,62 @@ interface ActivityParticipationItem {
   activity: Activity
 }
 
+interface RawActivityParticipationItem extends Omit<ActivityParticipationItem, "id" | "activity"> {
+  id?: string
+  _id?: string
+  activity: Omit<Activity, "id"> & { id?: string; _id?: string }
+}
+
 interface ActivitiesMeResponse {
   success: boolean
   message?: string
   data: {
-    participations: ActivityParticipationItem[]
+    participations: RawActivityParticipationItem[]
+  }
+}
+
+// The API returns the activity keyed by _id, not id — normalize here so the
+// "/activities/:id" link below gets a real id.
+function normalizeParticipation(participation: RawActivityParticipationItem): ActivityParticipationItem {
+  return {
+    ...participation,
+    id: participation.id ?? participation._id ?? "",
+    activity: { ...participation.activity, id: participation.activity.id ?? participation.activity._id ?? "" },
   }
 }
 
 interface VolunteerHoursResponse {
   success: boolean
   message?: string
-  data: VolunteerRecord
+  data: {
+    totalVolunteerHours: number
+    activitiesCompleted: number
+    history: unknown[]
+  }
+}
+
+interface RawActivity extends Omit<Activity, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Activity["club"], "id"> & { id?: string; _id?: string }
+}
+
+interface ActivitiesResponse {
+  success: boolean
+  message?: string
+  data: {
+    activities: RawActivity[]
+  }
+}
+
+// The API returns activities (and their populated club) keyed by _id, not id —
+// normalize here so the "/activities/:id" link below gets a real id.
+function normalizeActivity(activity: RawActivity): Activity {
+  return {
+    ...activity,
+    id: activity.id ?? activity._id ?? "",
+    club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+  }
 }
 
 export default function DashboardPage() {
@@ -62,6 +122,7 @@ export default function DashboardPage() {
 
   const [memberships, setMemberships] = useState<ClubMembershipItem[]>([])
   const [participations, setParticipations] = useState<ActivityParticipationItem[]>([])
+  const [upcomingActivities, setUpcomingActivities] = useState<Activity[]>([])
   const [totalVolunteerHours, setTotalVolunteerHours] = useState(0)
 
   const [isLoading, setIsLoading] = useState(true)
@@ -75,15 +136,27 @@ export default function DashboardPage() {
       setError(null)
 
       try {
-        const [clubsRes, activitiesRes, volunteerRes] = await Promise.all([
+        const [clubsRes, participationsRes, volunteerRes, activitiesRes] = await Promise.all([
           api<ClubsMeResponse>("/students/me/clubs"),
           api<ActivitiesMeResponse>("/students/me/activities"),
           api<VolunteerHoursResponse>("/students/me/volunteer-hours"),
+          api<ActivitiesResponse>("/activities?status=upcoming"),
         ])
 
-        setMemberships(clubsRes.data?.memberships ?? [])
-        setParticipations(activitiesRes.data?.participations ?? [])
-        setTotalVolunteerHours(volunteerRes.data?.totalHours ?? 0)
+        setMemberships((clubsRes.data?.memberships ?? []).map(normalizeMembership))
+        setParticipations((participationsRes.data?.participations ?? []).map(normalizeParticipation))
+        setTotalVolunteerHours(volunteerRes.data?.totalVolunteerHours ?? 0)
+
+        // status is set once at creation and never recomputed against the
+        // current date, so still filter/sort by date here rather than
+        // trusting the server-side status=upcoming filter alone.
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const upcoming = (activitiesRes.data?.activities ?? [])
+          .map(normalizeActivity)
+          .filter((activity) => new Date(activity.date) >= today)
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        setUpcomingActivities(upcoming)
       } catch (err) {
         setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลแดชบอร์ดได้")
       } finally {
@@ -94,7 +167,6 @@ export default function DashboardPage() {
     fetchDashboardData()
   }, [user])
 
-  const upcomingActivities = participations.filter(p => p.status === "registered")
   const attendedCount = participations.filter(p => p.status === "attended").length
 
   const stats = [
@@ -256,31 +328,31 @@ export default function DashboardPage() {
               <CardContent>
                 {upcomingActivities.length > 0 ? (
                   <div className="space-y-3">
-                    {upcomingActivities.slice(0, 3).map((participation) => (
+                    {upcomingActivities.slice(0, 3).map((activity) => (
                       <Link
-                        key={participation.id}
-                        href={`/activities/${participation.activity?.id}`}
+                        key={activity.id}
+                        href={`/activities/${activity.id}`}
                         className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                       >
                         <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
                           <Calendar className="h-5 w-5 text-accent" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-foreground truncate">{participation.activity?.title}</div>
+                          <div className="font-medium text-foreground truncate">{activity.title}</div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             <span className="numeric-font">
-                              {new Date(participation.activity?.date || "").toLocaleDateString("th-TH", {
+                              {new Date(activity.date || "").toLocaleDateString("th-TH", {
                                 day: "numeric",
                                 month: "short"
                               })}
                             </span>
                           </div>
                         </div>
-                        {(participation.activity?.volunteerHours ?? 0) > 0 && (
+                        {(activity.volunteerHours ?? 0) > 0 && (
                           <Badge variant="secondary" className="flex-shrink-0">
                             <Award className="h-3 w-3 mr-1" />
-                            <span className="numeric-font">{participation.activity?.volunteerHours}</span>&nbsp;ชม.
+                            <span className="numeric-font">{activity.volunteerHours}</span>&nbsp;ชม.
                           </Badge>
                         )}
                       </Link>

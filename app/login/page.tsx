@@ -24,10 +24,11 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
-    const success = await login(email, password)
-    
-    if (success) {
-      router.push("/dashboard")
+    const loggedInUser = await login(email, password)
+
+    if (loggedInUser) {
+      const isAdmin = loggedInUser.role === "club_admin" || loggedInUser.role === "superadmin"
+      router.push(isAdmin ? "/admin" : "/dashboard")
     } else {
       setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
     }
@@ -88,12 +89,6 @@ export default function LoginPage() {
             <Link href="/register" className="text-primary hover:underline">
               สมัครสมาชิก
             </Link>
-          </div>
-
-          <div className="mt-4 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-            <p className="font-medium mb-1">ทดสอบเข้าสู่ระบบ:</p>
-            <p>อีเมล: woramate@live.rmutl.ac.th</p>
-            <p>รหัสผ่าน: password123</p>
           </div>
         </CardContent>
       </Card>

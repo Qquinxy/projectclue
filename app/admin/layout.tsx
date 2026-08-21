@@ -1,27 +1,31 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
-import { 
-  LayoutDashboard, 
-  Users, 
-  Calendar, 
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
   UserCheck,
+  UserCog,
   Settings,
   ArrowLeft,
-  Menu
+  Menu,
+  Loader2
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 const sidebarItems = [
   { name: "ภาพรวม", href: "/admin", icon: LayoutDashboard },
   { name: "จัดการชมรม", href: "/admin/clubs", icon: Users },
   { name: "จัดการกิจกรรม", href: "/admin/activities", icon: Calendar },
   { name: "จัดการสมาชิก", href: "/admin/members", icon: UserCheck },
-  { name: "ตั้งค่าระบบ", href: "/admin/settings", icon: Settings },
+  { name: "จัดการผู้ดูแลชมรม", href: "/admin/club-admins", icon: UserCog },
+  { name: "ตั้งค่าระบบ", href: "/admin/settings", icon: Settings, superadminOnly: true },
 ]
 
 export default function AdminLayout({
@@ -30,7 +34,31 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, isLoading } = useAuth()
   const [open, setOpen] = useState(false)
+
+  const isAuthorized = user?.role === "superadmin" || user?.role === "club_admin"
+  const isSuperadmin = user?.role === "superadmin"
+  const isSettingsRoute = pathname === "/admin/settings"
+
+  useEffect(() => {
+    if (!isLoading && !isAuthorized) {
+      router.replace("/dashboard")
+    } else if (!isLoading && isAuthorized && !isSuperadmin && isSettingsRoute) {
+      router.replace("/admin")
+    }
+  }, [isLoading, isAuthorized, isSuperadmin, isSettingsRoute, router])
+
+  if (isLoading || !isAuthorized || (!isSuperadmin && isSettingsRoute)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  const visibleSidebarItems = sidebarItems.filter((item) => !item.superadminOnly || isSuperadmin)
 
   const SidebarContent = () => (
     <>
@@ -39,7 +67,7 @@ export default function AdminLayout({
         <p className="text-sm text-muted-foreground">จัดการชมรมและกิจกรรม</p>
       </div>
       <nav className="flex-1 px-4 py-4 space-y-1">
-        {sidebarItems.map((item) => (
+        {visibleSidebarItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}

@@ -1,33 +1,80 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { ActivityCard } from "@/components/activity-card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { mockActivities } from "@/lib/mock-data"
-import { ACTIVITY_TYPES, type ActivityStatus } from "@/lib/types"
-import { Search, Calendar } from "lucide-react"
+import { api } from "@/lib/api"
+import { ACTIVITY_TYPES, type Activity, type ActivityStatus } from "@/lib/types"
+import { Search, Calendar, Loader2, AlertCircle } from "lucide-react"
+
+interface RawActivity extends Omit<Activity, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Activity["club"], "id"> & { id?: string; _id?: string }
+}
+
+interface ActivitiesResponse {
+  success: boolean
+  message?: string
+  data: {
+    activities: RawActivity[]
+  }
+}
+
+// The API returns activities (and their populated club) keyed by _id, not id —
+// normalize here so ActivityCard's /activities/:id link gets a real id.
+function normalizeActivity(activity: RawActivity): Activity {
+  return {
+    ...activity,
+    id: activity.id ?? activity._id ?? "",
+    club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+  }
+}
 
 export default function ActivitiesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<ActivityStatus | "all">("all")
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredActivities = useMemo(() => {
-    return mockActivities.filter((activity) => {
-      const matchesSearch = 
-        activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        activity.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        activity.clubName.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchesType = selectedType === "all" || activity.type === selectedType
-      const matchesStatus = selectedStatus === "all" || activity.status === selectedStatus
+  useEffect(() => {
+    const controller = new AbortController()
 
-      return matchesSearch && matchesType && matchesStatus
-    })
+    const fetchActivities = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const params = new URLSearchParams()
+        if (searchQuery) params.set("search", searchQuery)
+        if (selectedType !== "all") params.set("type", selectedType)
+        if (selectedStatus !== "all") params.set("status", selectedStatus)
+
+        const query = params.toString()
+        const response = await api<ActivitiesResponse>(
+          `/activities${query ? `?${query}` : ""}`,
+          { signal: controller.signal }
+        )
+        setActivities((response.data?.activities ?? []).map(normalizeActivity))
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดรายการกิจกรรมได้")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    const timeout = setTimeout(fetchActivities, 300)
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
   }, [searchQuery, selectedType, selectedStatus])
 
   const statusTabs = [
@@ -116,13 +163,25 @@ export default function ActivitiesPage() {
         {/* Activities Grid */}
         <section className="py-12">
           <div className="container mx-auto px-4">
-            {filteredActivities.length > 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-24">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="text-center py-16">
+                <AlertCircle className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  เกิดข้อผิดพลาด
+                </h3>
+                <p className="text-muted-foreground">{error}</p>
+              </div>
+            ) : activities.length > 0 ? (
               <>
                 <p className="text-muted-foreground mb-6">
-                  แสดง <span className="numeric-font">{filteredActivities.length}</span> กิจกรรม
+                  แสดง <span className="numeric-font">{activities.length}</span> กิจกรรม
                 </p>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredActivities.map((activity) => (
+                  {activities.map((activity) => (
                     <ActivityCard key={activity.id} activity={activity} />
                   ))}
                 </div>

@@ -20,22 +20,32 @@ import {
   AlertCircle
 } from "lucide-react"
 
-interface ListResponse<T> {
+interface ClubsMeResponse {
   success: boolean
   message?: string
-  data: T[]
+  data: {
+    memberships: unknown[]
+  }
+}
+
+interface ParticipationItem {
+  status: string
+}
+
+interface ActivitiesMeResponse {
+  success: boolean
+  message?: string
+  data: {
+    participations: ParticipationItem[]
+  }
 }
 
 interface VolunteerHoursResponse {
   success: boolean
   message?: string
   data: {
-    totalHours: number
+    totalVolunteerHours: number
   }
-}
-
-interface ParticipationItem {
-  status: string
 }
 
 interface ProfileStats {
@@ -59,16 +69,16 @@ export default function ProfilePage() {
 
       try {
         const [clubsRes, activitiesRes, volunteerRes] = await Promise.all([
-          api<ListResponse<unknown>>("/students/me/clubs"),
-          api<ListResponse<ParticipationItem>>("/students/me/activities"),
+          api<ClubsMeResponse>("/students/me/clubs"),
+          api<ActivitiesMeResponse>("/students/me/activities"),
           api<VolunteerHoursResponse>("/students/me/volunteer-hours"),
         ])
 
         setStats({
-          activeClubs: clubsRes.data?.length ?? 0,
+          activeClubs: clubsRes.data?.memberships?.length ?? 0,
           attendedActivities:
-            activitiesRes.data?.filter((p) => p.status === "attended").length ?? 0,
-          totalVolunteerHours: volunteerRes.data?.totalHours ?? 0,
+            activitiesRes.data?.participations?.filter((p) => p.status === "attended").length ?? 0,
+          totalVolunteerHours: volunteerRes.data?.totalVolunteerHours ?? 0,
         })
       } catch (error) {
         setStatsError(

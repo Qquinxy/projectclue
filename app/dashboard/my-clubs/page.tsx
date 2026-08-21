@@ -25,11 +25,27 @@ interface ClubMembershipItem {
   club: Club
 }
 
+interface RawClubMembershipItem extends Omit<ClubMembershipItem, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Club, "id"> & { id?: string; _id?: string }
+}
+
 interface ClubsMeResponse {
   success: boolean
   message?: string
   data: {
-    memberships: ClubMembershipItem[]
+    memberships: RawClubMembershipItem[]
+  }
+}
+
+// The API returns the joined club keyed by _id, not id — normalize here so
+// the "/clubs/:id" links below get a real id, consistent with app/clubs/page.tsx.
+function normalizeMembership(membership: RawClubMembershipItem): ClubMembershipItem {
+  return {
+    ...membership,
+    id: membership.id ?? membership._id ?? "",
+    club: { ...membership.club, id: membership.club.id ?? membership.club._id ?? "" },
   }
 }
 
@@ -48,7 +64,7 @@ export default function MyClubsPage() {
 
       try {
         const response = await api<ClubsMeResponse>("/students/me/clubs")
-        setMemberships(response.data?.memberships ?? [])
+        setMemberships((response.data?.memberships ?? []).map(normalizeMembership))
       } catch (err) {
         setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลชมรมได้")
       } finally {

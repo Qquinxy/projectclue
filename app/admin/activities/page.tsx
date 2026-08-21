@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -22,16 +23,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { mockActivities } from "@/lib/mock-data"
-import { ACTIVITY_TYPES, type ActivityStatus } from "@/lib/types"
-import { 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { api } from "@/lib/api"
+import { ACTIVITY_TYPES, type Activity, type ActivityStatus, type ActivityType, type Club } from "@/lib/types"
+import {
+  Search,
+  Plus,
+  Edit,
+  Trash2,
   Calendar,
   Eye,
-  Award
+  Award,
+  Users,
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -50,29 +62,246 @@ const statusLabels = {
   cancelled: "ยกเลิก",
 }
 
+interface RawActivity extends Omit<Activity, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Activity["club"], "id"> & { id?: string; _id?: string }
+}
+
+interface ActivitiesResponse {
+  success: boolean
+  message?: string
+  data: {
+    activities: RawActivity[]
+  }
+}
+
+// The API returns activities (and their populated club) keyed by _id, not id —
+// normalize here so the view/participants links and delete action use a real id.
+function normalizeActivity(activity: RawActivity): Activity {
+  return {
+    ...activity,
+    id: activity.id ?? activity._id ?? "",
+    club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+  }
+}
+
+interface RawClub extends Omit<Club, "id"> {
+  id?: string
+  _id?: string
+}
+
+interface ClubsResponse {
+  success: boolean
+  message?: string
+  data: {
+    clubs: RawClub[]
+  }
+}
+
+function normalizeClub(club: RawClub): Club {
+  return { ...club, id: club.id ?? club._id ?? "" }
+}
+
+interface ActivityFormState {
+  club: string
+  title: string
+  description: string
+  date: string
+  startTime: string
+  endTime: string
+  maxParticipants: string
+  type: ActivityType | ""
+  location: string
+  volunteerHours: string
+  status: ActivityStatus | ""
+  image: string
+  requirements: string
+}
+
+const emptyActivityForm: ActivityFormState = {
+  club: "",
+  title: "",
+  description: "",
+  date: "",
+  startTime: "",
+  endTime: "",
+  maxParticipants: "",
+  type: "",
+  location: "",
+  volunteerHours: "",
+  status: "",
+  image: "",
+  requirements: "",
+}
+
+function activityToFormState(activity: Activity): ActivityFormState {
+  return {
+    club: activity.club.id,
+    title: activity.title,
+    description: activity.description,
+    date: activity.date ? new Date(activity.date).toISOString().slice(0, 10) : "",
+    startTime: activity.startTime ?? "",
+    endTime: activity.endTime ?? "",
+    maxParticipants: String(activity.maxParticipants),
+    type: activity.type,
+    location: activity.location ?? "",
+    volunteerHours: activity.volunteerHours ? String(activity.volunteerHours) : "",
+    status: activity.status,
+    image: activity.image ?? "",
+    requirements: (activity.requirements ?? []).join("\n"),
+  }
+}
+
+// Builds the POST/PATCH body: required fields always included, optional
+// fields included only when the admin actually provided a value. Never
+// includes currentParticipants/createdBy — those are server-managed.
+function buildActivityPayload(form: ActivityFormState) {
+  const payload: Record<string, unknown> = {
+    club: form.club,
+    title: form.title.trim(),
+    description: form.description.trim(),
+    date: form.date,
+    startTime: form.startTime.trim(),
+    endTime: form.endTime.trim(),
+    maxParticipants: Number(form.maxParticipants),
+    type: form.type,
+  }
+
+  if (form.location.trim()) payload.location = form.location.trim()
+  if (form.volunteerHours.trim()) payload.volunteerHours = Number(form.volunteerHours)
+  if (form.status) payload.status = form.status
+  if (form.image.trim()) payload.image = form.image.trim()
+
+  const requirements = form.requirements.split("\n").map((s) => s.trim()).filter(Boolean)
+  if (requirements.length > 0) payload.requirements = requirements
+
+  return payload
+}
+
 export default function AdminActivitiesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<ActivityStatus | "all">("all")
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const filteredActivities = mockActivities.filter((activity) => {
-    const matchesSearch = 
-      activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      activity.clubName.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || activity.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const [clubs, setClubs] = useState<Club[]>([])
+  const [formDialogOpen, setFormDialogOpen] = useState(false)
+  const [formMode, setFormMode] = useState<"create" | "edit">("create")
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null)
+  const [form, setForm] = useState<ActivityFormState>(emptyActivityForm)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const fetchActivities = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (searchQuery) params.set("search", searchQuery)
+      if (statusFilter !== "all") params.set("status", statusFilter)
+      const query = params.toString()
+      const response = await api<ActivitiesResponse>(`/activities${query ? `?${query}` : ""}`)
+      setActivities((response.data?.activities ?? []).map(normalizeActivity))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถโหลดรายการกิจกรรมได้")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [searchQuery, statusFilter])
+
+  useEffect(() => {
+    const timeout = setTimeout(fetchActivities, 300)
+    return () => clearTimeout(timeout)
+  }, [fetchActivities])
+
+  // Needed so the create/edit form can offer a club picker that sends a
+  // real club id, per the backend's required `club` ObjectId field.
+  useEffect(() => {
+    const fetchClubs = async () => {
+      try {
+        const response = await api<ClubsResponse>("/clubs")
+        setClubs((response.data?.clubs ?? []).map(normalizeClub))
+      } catch {
+        // Non-fatal: the activities list still works without the club picker.
+      }
+    }
+    fetchClubs()
+  }, [])
 
   const handleDelete = (activityId: string) => {
     setSelectedActivity(activityId)
+    setDeleteError(null)
     setDeleteDialogOpen(true)
   }
 
-  const confirmDelete = () => {
-    setDeleteDialogOpen(false)
-    setSelectedActivity(null)
+  const confirmDelete = async () => {
+    if (!selectedActivity) return
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      await api(`/activities/${selectedActivity}`, { method: "DELETE" })
+      setDeleteDialogOpen(false)
+      setSelectedActivity(null)
+      await fetchActivities()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "ไม่สามารถลบกิจกรรมได้")
+    } finally {
+      setIsDeleting(false)
+    }
   }
+
+  const openCreateDialog = () => {
+    setFormMode("create")
+    setEditingActivityId(null)
+    setForm(emptyActivityForm)
+    setFormError(null)
+    setFormDialogOpen(true)
+  }
+
+  const openEditDialog = (activity: Activity) => {
+    setFormMode("edit")
+    setEditingActivityId(activity.id)
+    setForm(activityToFormState(activity))
+    setFormError(null)
+    setFormDialogOpen(true)
+  }
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setFormError(null)
+    try {
+      const payload = buildActivityPayload(form)
+      if (formMode === "create") {
+        await api("/activities", { method: "POST", body: payload })
+      } else if (editingActivityId) {
+        await api(`/activities/${editingActivityId}`, { method: "PATCH", body: payload })
+      }
+      setFormDialogOpen(false)
+      await fetchActivities()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกข้อมูลกิจกรรมได้")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const isFormValid =
+    form.club !== "" &&
+    form.title.trim() !== "" &&
+    form.description.trim() !== "" &&
+    form.date !== "" &&
+    form.startTime.trim() !== "" &&
+    form.endTime.trim() !== "" &&
+    form.maxParticipants.trim() !== "" &&
+    Number(form.maxParticipants) > 0 &&
+    form.type !== ""
 
   return (
     <div className="space-y-6">
@@ -81,7 +310,7 @@ export default function AdminActivitiesPage() {
           <h1 className="text-2xl font-bold text-foreground">จัดการกิจกรรม</h1>
           <p className="text-muted-foreground">เพิ่ม แก้ไข และจัดการกิจกรรมของชมรม</p>
         </div>
-        <Button>
+        <Button onClick={openCreateDialog}>
           <Plus className="mr-2 h-4 w-4" />
           เพิ่มกิจกรรมใหม่
         </Button>
@@ -118,109 +347,302 @@ export default function AdminActivitiesPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
-            รายการกิจกรรม (<span className="numeric-font">{filteredActivities.length}</span>)
+            รายการกิจกรรม (<span className="numeric-font">{activities.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>กิจกรรม</TableHead>
-                  <TableHead>ชมรม</TableHead>
-                  <TableHead>วันที่</TableHead>
-                  <TableHead>ผู้เข้าร่วม</TableHead>
-                  <TableHead>ชม.จิตอาสา</TableHead>
-                  <TableHead>สถานะ</TableHead>
-                  <TableHead className="text-right">การดำเนินการ</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredActivities.map((activity) => {
-                  const activityType = ACTIVITY_TYPES.find(t => t.value === activity.type)
-                  const isFull = activity.currentParticipants >= activity.maxParticipants
-                  
-                  return (
-                    <TableRow key={activity.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                            <Calendar className="h-5 w-5 text-accent" />
-                          </div>
-                          <div>
-                            <div className="font-medium text-foreground">{activity.title}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {activityType?.label}
+          {error ? (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+              <p className="text-muted-foreground">{error}</p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>กิจกรรม</TableHead>
+                    <TableHead>ชมรม</TableHead>
+                    <TableHead>วันที่</TableHead>
+                    <TableHead>ผู้เข้าร่วม</TableHead>
+                    <TableHead>ชม.จิตอาสา</TableHead>
+                    <TableHead>สถานะ</TableHead>
+                    <TableHead className="text-right">การดำเนินการ</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activities.map((activity) => {
+                    const activityType = ACTIVITY_TYPES.find(t => t.value === activity.type)
+                    const isFull = activity.currentParticipants >= activity.maxParticipants
+
+                    return (
+                      <TableRow key={activity.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                              <Calendar className="h-5 w-5 text-accent" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-foreground">{activity.title}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {activityType?.label}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {activity.clubName}
-                      </TableCell>
-                      <TableCell>
-                        <div className="numeric-font text-sm">
-                          {new Date(activity.date).toLocaleDateString("th-TH", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric"
-                          })}
-                        </div>
-                        <div className="numeric-font text-xs text-muted-foreground">
-                          {activity.startTime} - {activity.endTime}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className={cn("numeric-font font-medium", isFull && "text-destructive")}>
-                            {activity.currentParticipants}
-                          </span>
-                          <span className="numeric-font text-muted-foreground">/ {activity.maxParticipants}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {activity.volunteerHours > 0 ? (
-                          <Badge variant="secondary" className="gap-1">
-                            <Award className="h-3 w-3" />
-                            <span className="numeric-font">{activity.volunteerHours}</span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {activity.club.name}
+                        </TableCell>
+                        <TableCell>
+                          <div className="numeric-font text-sm">
+                            {new Date(activity.date).toLocaleDateString("th-TH", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric"
+                            })}
+                          </div>
+                          <div className="numeric-font text-xs text-muted-foreground">
+                            {activity.startTime} - {activity.endTime}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className={cn("numeric-font font-medium", isFull && "text-destructive")}>
+                              {activity.currentParticipants}
+                            </span>
+                            <span className="numeric-font text-muted-foreground">/ {activity.maxParticipants}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {activity.volunteerHours > 0 ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <Award className="h-3 w-3" />
+                              <span className="numeric-font">{activity.volunteerHours}</span>
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={cn("text-xs", statusColors[activity.status])}>
+                            {statusLabels[activity.status]}
                           </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={cn("text-xs", statusColors[activity.status])}>
-                          {statusLabels[activity.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          <Button asChild variant="ghost" size="icon">
-                            <Link href={`/activities/${activity.id}`}>
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleDelete(activity.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button asChild variant="ghost" size="icon" title="ดูรายชื่อผู้เข้าร่วม">
+                              <Link href={`/admin/activities/${activity.id}`}>
+                                <Users className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                            <Button asChild variant="ghost" size="icon" title="ดูรายละเอียดกิจกรรม">
+                              <Link href={`/admin/activities/${activity.id}`}>
+                                <Eye className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(activity)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(activity.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+              {activities.length === 0 && (
+                <div className="text-center py-12">
+                  <Calendar className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">ไม่พบกิจกรรม</p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{formMode === "create" ? "เพิ่มกิจกรรมใหม่" : "แก้ไขกิจกรรม"}</DialogTitle>
+            <DialogDescription>
+              {formMode === "create" ? "กรอกข้อมูลกิจกรรมที่ต้องการเพิ่ม" : "แก้ไขข้อมูลกิจกรรมนี้"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="activity-club">ชมรม</FieldLabel>
+              <Select
+                value={form.club || undefined}
+                onValueChange={(value) => setForm((f) => ({ ...f, club: value }))}
+              >
+                <SelectTrigger id="activity-club" className="w-full">
+                  <SelectValue placeholder="เลือกชมรม" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clubs.map((club) => (
+                    <SelectItem key={club.id} value={club.id}>
+                      {club.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-title">ชื่อกิจกรรม</FieldLabel>
+              <Input
+                id="activity-title"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-description">รายละเอียด</FieldLabel>
+              <Textarea
+                id="activity-description"
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                rows={3}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-date">วันที่</FieldLabel>
+              <Input
+                id="activity-date"
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-start-time">เวลาเริ่ม</FieldLabel>
+              <Input
+                id="activity-start-time"
+                type="time"
+                value={form.startTime}
+                onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-end-time">เวลาสิ้นสุด</FieldLabel>
+              <Input
+                id="activity-end-time"
+                type="time"
+                value={form.endTime}
+                onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-max-participants">จำนวนผู้เข้าร่วมสูงสุด</FieldLabel>
+              <Input
+                id="activity-max-participants"
+                type="number"
+                min={1}
+                value={form.maxParticipants}
+                onChange={(e) => setForm((f) => ({ ...f, maxParticipants: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-type">ประเภทกิจกรรม</FieldLabel>
+              <Select
+                value={form.type || undefined}
+                onValueChange={(value) => setForm((f) => ({ ...f, type: value as ActivityType }))}
+              >
+                <SelectTrigger id="activity-type" className="w-full">
+                  <SelectValue placeholder="เลือกประเภทกิจกรรม" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTIVITY_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-location">สถานที่</FieldLabel>
+              <Input
+                id="activity-location"
+                value={form.location}
+                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-volunteer-hours">ชั่วโมงจิตอาสา</FieldLabel>
+              <Input
+                id="activity-volunteer-hours"
+                type="number"
+                min={0}
+                value={form.volunteerHours}
+                onChange={(e) => setForm((f) => ({ ...f, volunteerHours: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-status">สถานะ</FieldLabel>
+              <Select
+                value={form.status || undefined}
+                onValueChange={(value) => setForm((f) => ({ ...f, status: value as ActivityStatus }))}
+              >
+                <SelectTrigger id="activity-status" className="w-full">
+                  <SelectValue placeholder="เลือกสถานะ" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(statusLabels) as ActivityStatus[]).map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {statusLabels[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-image">รูปภาพ (URL)</FieldLabel>
+              <Input
+                id="activity-image"
+                value={form.image}
+                onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="activity-requirements">สิ่งที่ต้องเตรียม (บรรทัดละ 1 ข้อ)</FieldLabel>
+              <Textarea
+                id="activity-requirements"
+                value={form.requirements}
+                onChange={(e) => setForm((f) => ({ ...f, requirements: e.target.value }))}
+                rows={3}
+              />
+            </Field>
+          </FieldGroup>
+
+          {formError && (
+            <p className="text-sm text-destructive">{formError}</p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormDialogOpen(false)}>
+              ยกเลิก
+            </Button>
+            <Button onClick={handleSubmit} disabled={!isFormValid || isSubmitting}>
+              {isSubmitting ? "กำลังบันทึก..." : formMode === "create" ? "เพิ่มกิจกรรม" : "บันทึกการแก้ไข"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -231,12 +653,15 @@ export default function AdminActivitiesPage() {
               คุณต้องการลบกิจกรรมนี้หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               ยกเลิก
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              ลบกิจกรรม
+            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? "กำลังลบ..." : "ลบกิจกรรม"}
             </Button>
           </DialogFooter>
         </DialogContent>

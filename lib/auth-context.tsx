@@ -14,7 +14,7 @@ import { api } from "./api"
 interface AuthContextType {
   user: Student | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<Student | null>
   register: (data: RegisterData) => Promise<boolean>
   logout: () => Promise<void>
 }
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (
     email: string,
     password: string
-  ): Promise<boolean> => {
+  ): Promise<Student | null> => {
     try {
       const response = await api<AuthResponse>("/auth/login", {
         method: "POST",
@@ -79,13 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.success && response.data?.user) {
         setUser(response.data.user)
-        return true
+        return response.data.user
       }
 
-      return false
+      return null
     } catch (error) {
       console.error("Login error:", error)
-      return false
+      return null
     }
   }
 

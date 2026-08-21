@@ -44,6 +44,20 @@ export default function RegisterPage() {
     e.preventDefault()
     setError("")
 
+    const requiredFields: Array<keyof typeof formData> = [
+      "studentId",
+      "firstName",
+      "lastName",
+      "email",
+      "major",
+      "password",
+      "confirmPassword",
+    ]
+    if (requiredFields.some((field) => !formData[field].trim())) {
+      setError("กรุณากรอกข้อมูลให้ครบทุกช่อง")
+      return
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError("รหัสผ่านไม่ตรงกัน")
       return
@@ -98,7 +112,6 @@ export default function RegisterPage() {
                   placeholder="64010001"
                   value={formData.studentId}
                   onChange={(e) => handleChange("studentId", e.target.value)}
-                  required
                 />
               </Field>
 
@@ -110,7 +123,6 @@ export default function RegisterPage() {
                     placeholder="ชื่อ"
                     value={formData.firstName}
                     onChange={(e) => handleChange("firstName", e.target.value)}
-                    required
                   />
                 </Field>
                 <Field>
@@ -120,7 +132,6 @@ export default function RegisterPage() {
                     placeholder="นามสกุล"
                     value={formData.lastName}
                     onChange={(e) => handleChange("lastName", e.target.value)}
-                    required
                   />
                 </Field>
               </div>
@@ -133,14 +144,13 @@ export default function RegisterPage() {
                   placeholder="email@live.rmutl.ac.th"
                   value={formData.email}
                   onChange={(e) => handleChange("email", e.target.value)}
-                  required
                 />
               </Field>
 
               <Field>
                 <FieldLabel htmlFor="faculty">คณะ</FieldLabel>
                 <Select value={formData.faculty} onValueChange={(v) => handleChange("faculty", v)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="faculty">
                     <SelectValue placeholder="เลือกคณะ" />
                   </SelectTrigger>
                   <SelectContent>
@@ -159,13 +169,12 @@ export default function RegisterPage() {
                     placeholder="สาขาวิชา"
                     value={formData.major}
                     onChange={(e) => handleChange("major", e.target.value)}
-                    required
                   />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="year">ชั้นปี</FieldLabel>
                   <Select value={formData.year} onValueChange={(v) => handleChange("year", v)}>
-                    <SelectTrigger>
+                    <SelectTrigger id="year">
                       <SelectValue placeholder="ชั้นปี" />
                     </SelectTrigger>
                     <SelectContent>
@@ -185,7 +194,6 @@ export default function RegisterPage() {
                   placeholder="อย่างน้อย 6 ตัวอักษร"
                   value={formData.password}
                   onChange={(e) => handleChange("password", e.target.value)}
-                  required
                 />
               </Field>
 
@@ -197,7 +205,6 @@ export default function RegisterPage() {
                   placeholder="ยืนยันรหัสผ่าน"
                   value={formData.confirmPassword}
                   onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                  required
                 />
               </Field>
             </FieldGroup>

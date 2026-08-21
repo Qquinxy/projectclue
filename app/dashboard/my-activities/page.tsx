@@ -55,11 +55,36 @@ interface Participation {
   activity: ParticipationActivity
 }
 
+interface RawParticipation extends Omit<Participation, "id" | "activity"> {
+  id?: string
+  _id?: string
+  activity: Omit<ParticipationActivity, "id" | "club"> & {
+    id?: string
+    _id?: string
+    club: Omit<ActivityClub, "id"> & { id?: string; _id?: string }
+  }
+}
+
 interface ActivitiesMeResponse {
   success: boolean
   message?: string
   data: {
-    participations: Participation[]
+    participations: RawParticipation[]
+  }
+}
+
+// The API returns the activity (and its populated club) keyed by _id, not id —
+// normalize here so the "/activities/:id" and "/clubs/:id" links below work.
+function normalizeParticipation(participation: RawParticipation): Participation {
+  const { activity } = participation
+  return {
+    ...participation,
+    id: participation.id ?? participation._id ?? "",
+    activity: {
+      ...activity,
+      id: activity.id ?? activity._id ?? "",
+      club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+    },
   }
 }
 
@@ -79,7 +104,9 @@ export default function MyActivitiesPage() {
       try {
         const response = await api<ActivitiesMeResponse>("/students/me/activities")
         setParticipations(
-          (response.data?.participations ?? []).filter(p => p.activity)
+          (response.data?.participations ?? [])
+            .filter(p => p.activity)
+            .map(normalizeParticipation)
         )
       } catch (err) {
         setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลกิจกรรมได้")

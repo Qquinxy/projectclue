@@ -1,34 +1,91 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { HeroBackground } from "@/components/hero-background"
 import { Footer } from "@/components/footer"
 import { ClubMarquee } from "@/components/club-marquee"
 import { ActivityCard } from "@/components/activity-card"
-import { mockClubs, mockActivities } from "@/lib/mock-data"
-import { ArrowRight, Users, Calendar, Award, Heart } from "lucide-react"
+import { api } from "@/lib/api"
+import type { Club, Activity } from "@/lib/types"
+import { ArrowRight, Loader2, AlertCircle } from "lucide-react"
+
+interface RawClub extends Omit<Club, "id"> {
+  id?: string
+  _id?: string
+}
+
+interface ClubsResponse {
+  success: boolean
+  message?: string
+  data: {
+    clubs: RawClub[]
+  }
+}
+
+interface RawActivity extends Omit<Activity, "id" | "club"> {
+  id?: string
+  _id?: string
+  club: Omit<Activity["club"], "id"> & { id?: string; _id?: string }
+}
+
+interface ActivitiesResponse {
+  success: boolean
+  message?: string
+  data: {
+    activities: RawActivity[]
+  }
+}
+
+// The API returns clubs/activities (and populated clubs on activities) keyed
+// by _id, not id — normalize here so ClubCard/ActivityCard links get a real id.
+function normalizeClub(club: RawClub): Club {
+  return { ...club, id: club.id ?? club._id ?? "" }
+}
+
+function normalizeActivity(activity: RawActivity): Activity {
+  return {
+    ...activity,
+    id: activity.id ?? activity._id ?? "",
+    club: { ...activity.club, id: activity.club.id ?? activity.club._id ?? "" },
+  }
+}
 
 export default function HomePage() {
-  const topClubs = mockClubs.slice(0, 3)
-  const footballClub = mockClubs.find((c) => c.name.includes("ฟุตบอล"))
-  const featuredClubs = [
-    ...topClubs,
-    ...(footballClub && !topClubs.some((c) => c.id === footballClub.id) ? [footballClub] : []),
-  ]
-  const upcomingActivities = mockActivities.filter(a => a.status === "upcoming").slice(0, 3)
+  const [featuredClubs, setFeaturedClubs] = useState<Club[]>([])
+  const [upcomingActivities, setUpcomingActivities] = useState<Activity[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const stats = [
-    { label: "ชมรม", value: "25+", icon: Users },
-    { label: "กิจกรรม/ปี", value: "100+", icon: Calendar },
-    { label: "นักศึกษา", value: "2,000+", icon: Heart },
-    { label: "ชั่วโมงจิตอาสา", value: "5,000+", icon: Award },
-  ]
+  useEffect(() => {
+    const fetchHomeData = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const [clubsRes, activitiesRes] = await Promise.all([
+          api<ClubsResponse>("/clubs?limit=6"),
+          api<ActivitiesResponse>("/activities?status=upcoming&limit=3"),
+        ])
+
+        setFeaturedClubs((clubsRes.data?.clubs ?? []).map(normalizeClub))
+        setUpcomingActivities((activitiesRes.data?.activities ?? []).map(normalizeActivity))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลได้")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchHomeData()
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      
+
       <main className="flex-1">
         {/* Hero */}
         <section className="relative isolate overflow-hidden py-16 md:py-24">
@@ -57,19 +114,6 @@ export default function HomePage() {
                 </Button>
               </div>
             </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16">
-              {stats.map((stat) => (
-                <Card key={stat.label} className="stat-card">
-                  <CardContent className="p-4 text-center">
-                    <stat.icon className="h-5 w-5 mx-auto mb-2 text-[#6b3e00]" />
-                    <div className="numeric-font text-2xl font-bold text-foreground">{stat.value}</div>
-                    <div className="text-xs text-muted-foreground">{stat.label}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
           </div>
         </section>
 
@@ -85,7 +129,20 @@ export default function HomePage() {
                 </Link>
               </Button>
             </div>
-            <ClubMarquee clubs={featuredClubs} />
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                <AlertCircle className="h-5 w-5" />
+                <span>{error}</span>
+              </div>
+            ) : featuredClubs.length > 0 ? (
+              <ClubMarquee clubs={featuredClubs} />
+            ) : (
+              <p className="text-center text-muted-foreground py-12">ยังไม่มีชมรมในระบบ</p>
+            )}
           </div>
         </section>
 
@@ -101,11 +158,24 @@ export default function HomePage() {
                 </Link>
               </Button>
             </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {upcomingActivities.map((activity) => (
-                <ActivityCard key={activity.id} activity={activity} />
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                <AlertCircle className="h-5 w-5" />
+                <span>{error}</span>
+              </div>
+            ) : upcomingActivities.length > 0 ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {upcomingActivities.map((activity) => (
+                  <ActivityCard key={activity.id} activity={activity} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">ยังไม่มีกิจกรรมที่กำลังจะมา</p>
+            )}
           </div>
         </section>
 

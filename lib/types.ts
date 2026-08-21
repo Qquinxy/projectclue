@@ -26,8 +26,10 @@ export type ClubCategory =
 
 export interface Activity {
   id: string
-  clubId: string
-  clubName: string
+  club: {
+    id: string
+    name: string
+  }
   title: string
   description: string
   date: string
@@ -62,40 +64,33 @@ export interface Student {
   managedClubs: string[]
 }
 
+// Binary club membership only — the backend has no membership role or
+// approval status. See clubmemberships in the backend-development skill.
 export interface ClubMembership {
   id: string
-  studentId: string
-  clubId: string
-  role: MemberRole
+  club: {
+    id: string
+    name: string
+  }
   joinedAt: string
-  status: MembershipStatus
-}
-
-export type MemberRole = "member" | "committee" | "president" | "vice_president" | "secretary" | "treasurer"
-export type MembershipStatus = "pending" | "active" | "inactive" | "rejected"
-
-export interface ActivityParticipation {
-  id: string
-  studentId: string
-  activityId: string
-  registeredAt: string
-  attendedAt: string | null
-  status: ParticipationStatus
-  hoursEarned: number
 }
 
 export type ParticipationStatus = "registered" | "attended" | "absent" | "cancelled"
 
-export interface VolunteerRecord {
-  studentId: string
-  totalHours: number
-  activitiesCompleted: number
-  activities: {
-    activityId: string
-    activityTitle: string
-    date: string
-    hours: number
-  }[]
+export interface ActivityParticipation {
+  id: string
+  activity: {
+    id: string
+    title: string
+    club: {
+      id: string
+      name: string
+    }
+  }
+  status: ParticipationStatus
+  registeredAt: string
+  attendedAt: string | null
+  hoursEarned: number
 }
 
 export const CLUB_CATEGORIES: { value: ClubCategory; label: string; color: string }[] = [
@@ -113,13 +108,4 @@ export const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: "meeting", label: "ประชุม" },
   { value: "event", label: "กิจกรรมพิเศษ" },
   { value: "training", label: "อบรม" },
-]
-
-export const MEMBER_ROLES: { value: MemberRole; label: string }[] = [
-  { value: "president", label: "ประธานชมรม" },
-  { value: "vice_president", label: "รองประธาน" },
-  { value: "secretary", label: "เลขานุการ" },
-  { value: "treasurer", label: "เหรัญญิก" },
-  { value: "committee", label: "กรรมการ" },
-  { value: "member", label: "สมาชิก" },
 ]
