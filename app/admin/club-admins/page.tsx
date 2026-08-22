@@ -356,10 +356,10 @@ export default function AdminClubAdminsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 md:space-y-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">จัดการผู้ดูแลชมรม</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">จัดการผู้ดูแลชมรม</h1>
           <p className="text-muted-foreground">เพิ่ม แก้ไข และกำหนดชมรมที่ดูแลสำหรับบัญชีผู้ดูแลชมรม</p>
         </div>
         <Button onClick={openCreateDialog}>
@@ -386,19 +386,21 @@ export default function AdminClubAdminsPage() {
       {/* Club Admins Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <UserCog className="h-5 w-5 text-primary" />
+          <CardTitle className="text-lg tracking-tight flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+              <UserCog className="h-4 w-4 text-primary" />
+            </div>
             รายชื่อผู้ดูแลชมรม (<span className="numeric-font">{filteredAdmins.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
           {error ? (
-            <div className="text-center py-12">
+            <div className="rounded-xl border border-dashed py-12 text-center">
               <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-              <p className="text-muted-foreground">{error}</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
             </div>
           ) : isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center rounded-xl border border-dashed py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
@@ -478,7 +480,7 @@ export default function AdminClubAdminsPage() {
                 </TableBody>
               </Table>
               {filteredAdmins.length === 0 && (
-                <div className="text-center py-12">
+                <div className="rounded-xl border border-dashed py-12 text-center">
                   <UserCog className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                   <p className="text-muted-foreground">ไม่พบผู้ดูแลชมรม</p>
                 </div>
@@ -570,7 +572,11 @@ export default function AdminClubAdminsPage() {
             </Field>
           </FieldGroup>
 
-          {createError && <p className="text-sm text-destructive">{createError}</p>}
+          {createError && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {createError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
@@ -641,7 +647,11 @@ export default function AdminClubAdminsPage() {
             </Field>
           </FieldGroup>
 
-          {editError && <p className="text-sm text-destructive">{editError}</p>}
+          {editError && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {editError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
@@ -674,7 +684,11 @@ export default function AdminClubAdminsPage() {
             ))}
           </div>
 
-          {assignError && <p className="text-sm text-destructive">{assignError}</p>}
+          {assignError && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {assignError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
@@ -696,7 +710,11 @@ export default function AdminClubAdminsPage() {
               คุณต้องการลบบัญชีผู้ดูแลชมรมนี้หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้
             </DialogDescription>
           </DialogHeader>
-          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+          {deleteError && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {deleteError}
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               ยกเลิก
