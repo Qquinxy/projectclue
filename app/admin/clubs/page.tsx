@@ -253,10 +253,10 @@ export default function AdminClubsPage() {
     : clubs
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 md:space-y-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">จัดการชมรม</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">จัดการชมรม</h1>
           <p className="text-muted-foreground">เพิ่ม แก้ไข และลบข้อมูลชมรม</p>
         </div>
         {!isClubAdmin && (
@@ -287,19 +287,21 @@ export default function AdminClubsPage() {
       {/* Clubs Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
+          <CardTitle className="text-lg tracking-tight flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
             รายชื่อชมรม (<span className="numeric-font">{visibleClubs.length}</span>)
           </CardTitle>
         </CardHeader>
         <CardContent>
           {error ? (
-            <div className="text-center py-12">
+            <div className="rounded-xl border border-dashed py-12 text-center">
               <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-              <p className="text-muted-foreground">{error}</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
             </div>
           ) : isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center rounded-xl border border-dashed py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
@@ -388,7 +390,7 @@ export default function AdminClubsPage() {
                 </TableBody>
               </Table>
               {visibleClubs.length === 0 && (
-                <div className="text-center py-12">
+                <div className="rounded-xl border border-dashed py-12 text-center">
                   <Users className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                   <p className="text-muted-foreground">ไม่พบชมรม</p>
                 </div>
@@ -524,7 +526,9 @@ export default function AdminClubsPage() {
           </FieldGroup>
 
           {formError && (
-            <p className="text-sm text-destructive">{formError}</p>
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {formError}
+            </div>
           )}
 
           <DialogFooter>
@@ -548,7 +552,9 @@ export default function AdminClubsPage() {
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
-            <p className="text-sm text-destructive">{deleteError}</p>
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {deleteError}
+            </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>

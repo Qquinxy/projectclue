@@ -176,8 +176,10 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center py-24">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="flex w-full items-center justify-center rounded-xl border border-dashed py-24 min-h-[16rem]">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
         </main>
         <Footer />
       </div>
@@ -188,9 +190,11 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-4">
-          <AlertCircle className="h-12 w-12 text-muted-foreground/40" />
-          <p className="text-muted-foreground">{error ?? "ไม่พบข้อมูลชมรม"}</p>
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="flex w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed py-24 text-center">
+            <AlertCircle className="h-12 w-12 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">{error ?? "ไม่พบข้อมูลชมรม"}</p>
+          </div>
         </main>
         <Footer />
       </div>
@@ -206,7 +210,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
 
       <main className="flex-1">
         {/* Header */}
-        <section className="bg-gradient-to-br from-primary/10 via-background to-accent/10 py-8">
+        <section className="bg-gradient-to-br from-primary/10 via-background to-accent/10 py-14 md:py-16">
           <div className="container mx-auto px-4">
             <Link
               href="/clubs"
@@ -241,7 +245,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                   )}
                 </div>
 
-                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-4">
                   {club.name}
                 </h1>
 
@@ -291,7 +295,10 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
 
                 {actionError && (
-                  <p className="text-sm text-destructive mb-4">{actionError}</p>
+                  <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{actionError}</span>
+                  </div>
                 )}
 
                 {!user && (
@@ -360,16 +367,16 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
         </section>
 
         {/* Details */}
-        <section className="py-12">
+        <section className="py-14 md:py-16">
           <div className="container mx-auto px-4">
-            <div className="grid lg:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-8">
                 {/* Requirements */}
                 {club.requirements.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-xl">คุณสมบัติผู้สมัคร</CardTitle>
+                      <CardTitle className="text-xl tracking-tight">คุณสมบัติผู้สมัคร</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-2">
@@ -388,7 +395,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                 {club.benefits.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-xl">สิทธิประโยชน์</CardTitle>
+                      <CardTitle className="text-xl tracking-tight">สิทธิประโยชน์</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-2">
@@ -406,8 +413,10 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                 {/* Club Activities */}
                 {clubActivities.length > 0 && (
                   <div>
-                    <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-2">
-                      <Calendar className="h-6 w-6 text-primary" />
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground mb-6 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 shrink-0">
+                        <Calendar className="h-5 w-5 text-accent" />
+                      </div>
                       กิจกรรมที่กำลังจะมา
                     </h2>
                     <div className="grid md:grid-cols-2 gap-6">
@@ -423,7 +432,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">ติดต่อชมรม</CardTitle>
+                    <CardTitle className="text-lg tracking-tight">ติดต่อชมรม</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center gap-3">
@@ -444,7 +453,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">สถิติชมรม</CardTitle>
+                    <CardTitle className="text-lg tracking-tight">สถิติชมรม</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">

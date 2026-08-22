@@ -209,7 +209,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 md:space-y-10">
       {/* Welcome Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -219,7 +219,7 @@ export default function DashboardPage() {
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               สวัสดี, {user.firstName}
             </h1>
             <p className="text-muted-foreground">
@@ -239,27 +239,27 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground mb-2">
               เกิดข้อผิดพลาด
             </h3>
-            <p className="text-muted-foreground">{error}</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
           </CardContent>
         </Card>
       ) : isLoading ? (
-        <div className="flex items-center justify-center py-24">
+        <div className="flex items-center justify-center rounded-xl border border-dashed py-24 min-h-[16rem]">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {stats.map((stat) => (
               <Link key={stat.label} href={stat.href}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <Card className="hover:shadow-md hover:border-primary/30 transition-shadow cursor-pointer">
                   <CardContent className="p-4 md:p-6">
                     <div className="flex items-center justify-between">
                       <stat.icon className={`h-8 w-8 ${stat.color}`} />
-                      <span className="numeric-font text-3xl font-bold text-foreground">{stat.value}</span>
+                      <span className="numeric-font text-3xl font-bold tracking-tight text-foreground">{stat.value}</span>
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">{stat.label}</p>
                   </CardContent>
@@ -272,7 +272,12 @@ export default function DashboardPage() {
             {/* My Clubs */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">ชมรมของฉัน</CardTitle>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                    <Users className="h-4 w-4 text-primary" />
+                  </div>
+                  <CardTitle className="text-lg">ชมรมของฉัน</CardTitle>
+                </div>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/dashboard/my-clubs">
                     ดูทั้งหมด
@@ -303,7 +308,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
+                  <div className="rounded-xl border border-dashed py-8 text-center">
                     <Users className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
                     <p className="text-muted-foreground mb-4">คุณยังไม่ได้เข้าร่วมชมรมใดๆ</p>
                     <Button asChild variant="outline">
@@ -317,7 +322,12 @@ export default function DashboardPage() {
             {/* Upcoming Activities */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">กิจกรรมที่กำลังจะมา</CardTitle>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 shrink-0">
+                    <Calendar className="h-4 w-4 text-accent" />
+                  </div>
+                  <CardTitle className="text-lg">กิจกรรมที่กำลังจะมา</CardTitle>
+                </div>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/dashboard/my-activities">
                     ดูทั้งหมด
@@ -359,7 +369,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
+                  <div className="rounded-xl border border-dashed py-8 text-center">
                     <Calendar className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
                     <p className="text-muted-foreground mb-4">ไม่มีกิจกรรมที่กำลังจะมา</p>
                     <Button asChild variant="outline">
@@ -374,7 +384,7 @@ export default function DashboardPage() {
           {/* Volunteer Hours Summary */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg tracking-tight flex items-center gap-2">
                 <Award className="h-5 w-5 text-primary" />
                 สรุปชั่วโมงจิตอาสา
               </CardTitle>
@@ -383,7 +393,7 @@ export default function DashboardPage() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                   <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="numeric-font text-3xl font-bold text-primary">{totalVolunteerHours}</span>
+                    <span className="numeric-font text-3xl font-bold tracking-tight text-primary">{totalVolunteerHours}</span>
                   </div>
                   <div>
                     <div className="text-lg font-semibold text-foreground">ชั่วโมงสะสม</div>

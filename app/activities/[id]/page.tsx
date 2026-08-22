@@ -158,8 +158,10 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center py-24">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="flex w-full items-center justify-center rounded-xl border border-dashed py-24 min-h-[16rem]">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
         </main>
         <Footer />
       </div>
@@ -170,9 +172,11 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-4">
-          <AlertCircle className="h-12 w-12 text-muted-foreground/40" />
-          <p className="text-muted-foreground">{error ?? "ไม่พบข้อมูลกิจกรรม"}</p>
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="flex w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed py-24 text-center">
+            <AlertCircle className="h-12 w-12 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">{error ?? "ไม่พบข้อมูลกิจกรรม"}</p>
+          </div>
         </main>
         <Footer />
       </div>
@@ -190,7 +194,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
 
       <main className="flex-1">
         {/* Header */}
-        <section className="bg-gradient-to-br from-accent/10 via-background to-primary/10 py-8">
+        <section className="bg-gradient-to-br from-accent/10 via-background to-primary/10 py-14 md:py-16">
           <div className="container mx-auto px-4">
             <Link
               href="/activities"
@@ -235,7 +239,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                   </Badge>
                 </div>
 
-                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-4">
                   {activity.title}
                 </h1>
 
@@ -302,7 +306,10 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                 </div>
 
                 {actionError && (
-                  <p className="text-sm text-destructive mb-4">{actionError}</p>
+                  <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{actionError}</span>
+                  </div>
                 )}
 
                 {!user && activity.status === "upcoming" && !isFull && (
@@ -385,16 +392,16 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
         </section>
 
         {/* Details */}
-        <section className="py-12">
+        <section className="py-14 md:py-16">
           <div className="container mx-auto px-4">
-            <div className="grid lg:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-8">
                 {/* Requirements */}
                 {activity.requirements.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-xl flex items-center gap-2">
+                      <CardTitle className="text-xl tracking-tight flex items-center gap-2">
                         <Info className="h-5 w-5 text-primary" />
                         สิ่งที่ต้องเตรียม
                       </CardTitle>
@@ -415,7 +422,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                 {/* Activity Info Card */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-xl">รายละเอียดกิจกรรม</CardTitle>
+                    <CardTitle className="text-xl tracking-tight">รายละเอียดกิจกรรม</CardTitle>
                   </CardHeader>
                   <CardContent className="prose prose-sm max-w-none text-muted-foreground">
                     <p>{activity.description}</p>
@@ -433,7 +440,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">ข้อมูลกิจกรรม</CardTitle>
+                    <CardTitle className="text-lg tracking-tight">ข้อมูลกิจกรรม</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -474,7 +481,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">จัดโดย</CardTitle>
+                    <CardTitle className="text-lg tracking-tight">จัดโดย</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Link

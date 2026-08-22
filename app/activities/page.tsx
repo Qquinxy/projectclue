@@ -90,15 +90,15 @@ export default function ActivitiesPage() {
 
       <main className="flex-1">
         {/* Header */}
-        <section className="bg-gradient-to-br from-accent/5 via-background to-primary/5 py-12">
+        <section className="bg-gradient-to-br from-accent/5 via-background to-primary/5 py-14 md:py-16">
           <div className="container mx-auto px-4">
             <div className="max-w-2xl mx-auto text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                  <Calendar className="h-5 w-5 text-primary-foreground" />
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <Calendar className="h-5 w-5 text-accent" />
                 </div>
               </div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-4">
                 กิจกรรมทั้งหมด
               </h1>
               <p className="text-muted-foreground mb-8">
@@ -161,38 +161,38 @@ export default function ActivitiesPage() {
         </section>
 
         {/* Activities Grid */}
-        <section className="py-12">
+        <section className="py-14 md:py-16">
           <div className="container mx-auto px-4">
             {isLoading ? (
-              <div className="flex items-center justify-center py-24">
+              <div className="flex items-center justify-center rounded-xl border border-dashed py-24 min-h-[16rem]">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : error ? (
-              <div className="text-center py-16">
+              <div className="rounded-xl border border-dashed py-16 text-center">
                 <AlertCircle className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">
+                <h3 className="text-xl font-semibold tracking-tight text-foreground mb-2">
                   เกิดข้อผิดพลาด
                 </h3>
-                <p className="text-muted-foreground">{error}</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
               </div>
             ) : activities.length > 0 ? (
               <>
                 <p className="text-muted-foreground mb-6">
                   แสดง <span className="numeric-font">{activities.length}</span> กิจกรรม
                 </p>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {activities.map((activity) => (
                     <ActivityCard key={activity.id} activity={activity} />
                   ))}
                 </div>
               </>
             ) : (
-              <div className="text-center py-16">
+              <div className="rounded-xl border border-dashed py-16 text-center">
                 <Calendar className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">
+                <h3 className="text-xl font-semibold tracking-tight text-foreground mb-2">
                   ไม่พบกิจกรรมที่ค้นหา
                 </h3>
-                <p className="text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   ลองเปลี่ยนคำค้นหาหรือเลือกตัวกรองอื่น
                 </p>
               </div>

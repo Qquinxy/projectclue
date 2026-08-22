@@ -81,15 +81,15 @@ export default function ClubsPage() {
 
       <main className="flex-1">
         {/* Header */}
-        <section className="bg-gradient-to-br from-primary/5 via-background to-accent/5 py-12">
+        <section className="bg-gradient-to-br from-primary/5 via-background to-accent/5 py-14 md:py-16">
           <div className="container mx-auto px-4">
             <div className="max-w-2xl mx-auto text-center">
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary-foreground" />
+              <div className="flex items-center justify-center gap-2 mb-5">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-primary" />
                 </div>
               </div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-4">
                 ชมรมทั้งหมด
               </h1>
               <p className="text-muted-foreground mb-8">
@@ -147,16 +147,16 @@ export default function ClubsPage() {
         <section className="py-12">
           <div className="container mx-auto px-4">
             {isLoading ? (
-              <div className="flex items-center justify-center py-24">
+              <div className="flex items-center justify-center rounded-xl border border-dashed py-24 min-h-[16rem]">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : error ? (
-              <div className="text-center py-16">
+              <div className="rounded-xl border border-dashed py-16 text-center">
                 <AlertCircle className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">
+                <h3 className="text-xl font-semibold tracking-tight text-foreground mb-2">
                   เกิดข้อผิดพลาด
                 </h3>
-                <p className="text-muted-foreground">{error}</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
               </div>
             ) : clubs.length > 0 ? (
               <>
@@ -170,12 +170,12 @@ export default function ClubsPage() {
                 </div>
               </>
             ) : (
-              <div className="text-center py-16">
+              <div className="rounded-xl border border-dashed py-16 text-center">
                 <Users className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">
+                <h3 className="text-xl font-semibold tracking-tight text-foreground mb-2">
                   ไม่พบชมรมที่ค้นหา
                 </h3>
-                <p className="text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่น
                 </p>
               </div>

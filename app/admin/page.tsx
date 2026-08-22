@@ -161,7 +161,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">แดชบอร์ดผู้ดูแลระบบ</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">แดชบอร์ดผู้ดูแลระบบ</h1>
         <p className="text-muted-foreground">ภาพรวมและสถิติของระบบชมรม</p>
       </div>
 
@@ -169,23 +169,23 @@ export default function AdminDashboardPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <AlertCircle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground mb-2">
               เกิดข้อผิดพลาด
             </h3>
-            <p className="text-muted-foreground">{error}</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
           </CardContent>
         </Card>
       ) : isLoading ? (
-        <div className="flex items-center justify-center py-24">
+        <div className="flex items-center justify-center rounded-xl border border-dashed py-24 min-h-[16rem]">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {stats.map((stat) => (
               <Link key={stat.label} href={stat.href}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                <Card className="hover:shadow-md hover:border-primary/30 transition-shadow cursor-pointer h-full">
                   <CardContent className="p-4 md:p-6">
                     <div className="flex items-center justify-between">
                       <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
@@ -204,7 +204,12 @@ export default function AdminDashboardPage() {
             {/* Recent Clubs */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">ชมรมล่าสุด</CardTitle>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                    <Users className="h-4 w-4 text-primary" />
+                  </div>
+                  <CardTitle className="text-lg tracking-tight">ชมรมล่าสุด</CardTitle>
+                </div>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/admin/clubs">
                     ดูทั้งหมด
@@ -213,34 +218,46 @@ export default function AdminDashboardPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {recentClubs.map((club) => (
-                    <div
-                      key={club.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Users className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground truncate">{club.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          <span className="numeric-font">{club.memberCount}</span> สมาชิก
+                {recentClubs.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentClubs.map((club) => (
+                      <div
+                        key={club.id}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Users className="h-5 w-5 text-primary" />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-foreground truncate">{club.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            <span className="numeric-font">{club.memberCount}</span> สมาชิก
+                          </div>
+                        </div>
+                        <Badge variant="outline">
+                          <span className="numeric-font">{club.memberCount}/{club.maxMembers}</span>
+                        </Badge>
                       </div>
-                      <Badge variant="outline">
-                        <span className="numeric-font">{club.memberCount}/{club.maxMembers}</span>
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed py-8 text-center">
+                    <Users className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">ยังไม่มีชมรมล่าสุด</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             {/* Upcoming Activities */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">กิจกรรมที่กำลังจะมา</CardTitle>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 shrink-0">
+                    <Calendar className="h-4 w-4 text-accent" />
+                  </div>
+                  <CardTitle className="text-lg tracking-tight">กิจกรรมที่กำลังจะมา</CardTitle>
+                </div>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/admin/activities">
                     ดูทั้งหมด
@@ -249,32 +266,39 @@ export default function AdminDashboardPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {recentActivities.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                        <Calendar className="h-5 w-5 text-accent" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground truncate">{activity.title}</div>
-                        <div className="text-sm text-muted-foreground">
-                          <span className="numeric-font">
-                            {new Date(activity.date).toLocaleDateString("th-TH", {
-                              day: "numeric",
-                              month: "short"
-                            })}
-                          </span> - {activity.club.name}
+                {recentActivities.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentActivities.map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                          <Calendar className="h-5 w-5 text-accent" />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-foreground truncate">{activity.title}</div>
+                          <div className="text-sm text-muted-foreground">
+                            <span className="numeric-font">
+                              {new Date(activity.date).toLocaleDateString("th-TH", {
+                                day: "numeric",
+                                month: "short"
+                              })}
+                            </span> - {activity.club.name}
+                          </div>
+                        </div>
+                        <Badge variant="secondary">
+                          <span className="numeric-font">{activity.currentParticipants}/{activity.maxParticipants}</span>
+                        </Badge>
                       </div>
-                      <Badge variant="secondary">
-                        <span className="numeric-font">{activity.currentParticipants}/{activity.maxParticipants}</span>
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed py-8 text-center">
+                    <Calendar className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">ไม่มีกิจกรรมที่กำลังจะมา</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -282,7 +306,7 @@ export default function AdminDashboardPage() {
           {/* Quick Actions */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">การดำเนินการด่วน</CardTitle>
+              <CardTitle className="text-lg tracking-tight">การดำเนินการด่วน</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
