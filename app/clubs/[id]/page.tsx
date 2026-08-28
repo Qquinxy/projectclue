@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ActivityCard } from "@/components/activity-card"
 import { useAuth } from "@/lib/auth-context"
-import { api } from "@/lib/api"
+import { api, resolveImageUrl } from "@/lib/api"
 import { CLUB_CATEGORIES, type Club, type Activity } from "@/lib/types"
 import {
   Users,
@@ -223,10 +223,19 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Club Image */}
               <div className="lg:w-1/3">
-                <div
-                  aria-hidden
-                  className="relative aspect-video lg:aspect-square rounded-xl border border-dashed border-[#d8d0bd] bg-gradient-to-br from-primary/10 to-accent/10"
-                />
+                {club.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={resolveImageUrl(club.image)}
+                    alt={club.name}
+                    className="aspect-video lg:aspect-square w-full rounded-xl object-cover"
+                  />
+                ) : (
+                  <div
+                    aria-hidden
+                    className="relative aspect-video lg:aspect-square rounded-xl border border-dashed border-[#d8d0bd] bg-gradient-to-br from-primary/10 to-accent/10"
+                  />
+                )}
               </div>
 
               {/* Club Info */}
@@ -350,7 +359,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                 )}
 
                 {user && isMember && (
-                  <Button size="lg" variant="secondary" onClick={handleLeave} disabled={isLeaving}>
+                  <Button size="lg" variant="destructive" onClick={handleLeave} disabled={isLeaving}>
                     <CheckCircle className="h-5 w-5 mr-2" />
                     {isLeaving ? "กำลังออกจากชมรม..." : "ออกจากชมรม"}
                   </Button>

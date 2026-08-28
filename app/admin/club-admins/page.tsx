@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Table,
@@ -23,6 +22,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { api } from "@/lib/api"
 import type { Club } from "@/lib/types"
@@ -34,8 +40,14 @@ import {
   UserCog,
   Building2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  TriangleAlert
 } from "lucide-react"
+
+// A club_admin manages at most one club (enforced client- and server-side).
+// A dedicated sentinel is used for "no club assigned" since the underlying
+// Select primitive can't represent an empty-string item value.
+const NO_CLUB_VALUE = "none"
 
 // --- Clubs (for club-name lookups and the managed-clubs checklist) ---
 
@@ -108,7 +120,7 @@ interface CreateFormState {
   email: string
   password: string
   phone: string
-  managedClubs: string[]
+  managedClub: string
 }
 
 const emptyCreateForm: CreateFormState = {
@@ -118,7 +130,7 @@ const emptyCreateForm: CreateFormState = {
   email: "",
   password: "",
   phone: "",
-  managedClubs: [],
+  managedClub: "",
 }
 
 function buildCreatePayload(form: CreateFormState) {
@@ -130,7 +142,7 @@ function buildCreatePayload(form: CreateFormState) {
     password: form.password,
   }
   if (form.phone.trim()) payload.phone = form.phone.trim()
-  if (form.managedClubs.length > 0) payload.managedClubs = form.managedClubs
+  if (form.managedClub) payload.managedClubs = [form.managedClub]
   return payload
 }
 
@@ -139,7 +151,7 @@ interface EditFormState {
   lastName: string
   email: string
   phone: string
-  managedClubs: string[]
+  managedClub: string
 }
 
 function clubAdminToEditForm(admin: ClubAdmin): EditFormState {
@@ -148,12 +160,8 @@ function clubAdminToEditForm(admin: ClubAdmin): EditFormState {
     lastName: admin.lastName,
     email: admin.email,
     phone: admin.phone,
-    managedClubs: admin.managedClubs,
+    managedClub: admin.managedClubs[0] ?? "",
   }
-}
-
-function sameClubIds(a: string[], b: string[]) {
-  return a.length === b.length && a.every((id) => b.includes(id))
 }
 
 export default function AdminClubAdminsPage() {
@@ -193,6 +201,14 @@ export default function AdminClubAdminsPage() {
     admin.email.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // Client-side pre-check for the 1:1 rule (a club may have only one
+  // admin) — immediate feedback before the round-trip; the backend's own
+  // check (409) remains the source of truth for race conditions.
+  const findConflictingAdmin = (clubId: string, excludeAdminId?: string) =>
+    clubAdmins.find(
+      (admin) => admin.id !== excludeAdminId && admin.managedClubs.includes(clubId)
+    ) ?? null
+
   // --- Create ---
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm)
@@ -208,6 +224,16 @@ export default function AdminClubAdminsPage() {
   const handleCreate = async () => {
     setIsCreating(true)
     setCreateError(null)
+
+    if (createForm.managedClub) {
+      const conflict = findConflictingAdmin(createForm.managedClub)
+      if (conflict) {
+        setCreateError(`ชมรมนี้มี ${conflict.firstName} ${conflict.lastName} เป็นผู้ดูแลอยู่แล้ว`)
+        setIsCreating(false)
+        return
+      }
+    }
+
     try {
       await api("/admin/users", { method: "POST", body: buildCreatePayload(createForm) })
       setCreateDialogOpen(false)
@@ -229,32 +255,33 @@ export default function AdminClubAdminsPage() {
   // --- Edit ---
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<EditFormState>({ firstName: "", lastName: "", email: "", phone: "", managedClubs: [] })
-  const [editOriginalManagedClubs, setEditOriginalManagedClubs] = useState<string[]>([])
+  const [editForm, setEditForm] = useState<EditFormState>({ firstName: "", lastName: "", email: "", phone: "", managedClub: "" })
+  const [editOriginalManagedClub, setEditOriginalManagedClub] = useState("")
   const [isEditing, setIsEditing] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
   const openEditDialog = (admin: ClubAdmin) => {
     setEditingId(admin.id)
     setEditForm(clubAdminToEditForm(admin))
-    setEditOriginalManagedClubs(admin.managedClubs)
+    setEditOriginalManagedClub(admin.managedClubs[0] ?? "")
     setEditError(null)
     setEditDialogOpen(true)
-  }
-
-  const toggleEditManagedClub = (clubId: string, checked: boolean) => {
-    setEditForm((f) => ({
-      ...f,
-      managedClubs: checked
-        ? [...f.managedClubs, clubId]
-        : f.managedClubs.filter((id) => id !== clubId),
-    }))
   }
 
   const handleEdit = async () => {
     if (!editingId) return
     setIsEditing(true)
     setEditError(null)
+
+    if (editForm.managedClub && editForm.managedClub !== editOriginalManagedClub) {
+      const conflict = findConflictingAdmin(editForm.managedClub, editingId)
+      if (conflict) {
+        setEditError(`ชมรมนี้มี ${conflict.firstName} ${conflict.lastName} เป็นผู้ดูแลอยู่แล้ว`)
+        setIsEditing(false)
+        return
+      }
+    }
+
     try {
       await api(`/admin/users/${editingId}`, {
         method: "PATCH",
@@ -268,10 +295,10 @@ export default function AdminClubAdminsPage() {
 
       // Managed clubs live on a separate endpoint — only call it if the
       // admin actually changed the selection in this dialog.
-      if (!sameClubIds(editForm.managedClubs, editOriginalManagedClubs)) {
+      if (editForm.managedClub !== editOriginalManagedClub) {
         await api(`/admin/users/${editingId}/clubs`, {
           method: "PATCH",
-          body: { managedClubs: editForm.managedClubs },
+          body: { managedClubs: editForm.managedClub ? [editForm.managedClub] : [] },
         })
       }
 
@@ -289,34 +316,38 @@ export default function AdminClubAdminsPage() {
     editForm.lastName.trim() !== "" &&
     editForm.email.trim() !== ""
 
-  // --- Assign managed clubs ---
+  // --- Assign managed club ---
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assigningId, setAssigningId] = useState<string | null>(null)
-  const [assignManagedClubs, setAssignManagedClubs] = useState<string[]>([])
+  const [assignManagedClub, setAssignManagedClub] = useState("")
   const [isAssigning, setIsAssigning] = useState(false)
   const [assignError, setAssignError] = useState<string | null>(null)
 
   const openAssignDialog = (admin: ClubAdmin) => {
     setAssigningId(admin.id)
-    setAssignManagedClubs(admin.managedClubs)
+    setAssignManagedClub(admin.managedClubs[0] ?? "")
     setAssignError(null)
     setAssignDialogOpen(true)
-  }
-
-  const toggleAssignedClub = (clubId: string, checked: boolean) => {
-    setAssignManagedClubs((current) =>
-      checked ? [...current, clubId] : current.filter((id) => id !== clubId)
-    )
   }
 
   const handleAssign = async () => {
     if (!assigningId) return
     setIsAssigning(true)
     setAssignError(null)
+
+    if (assignManagedClub) {
+      const conflict = findConflictingAdmin(assignManagedClub, assigningId)
+      if (conflict) {
+        setAssignError(`ชมรมนี้มี ${conflict.firstName} ${conflict.lastName} เป็นผู้ดูแลอยู่แล้ว`)
+        setIsAssigning(false)
+        return
+      }
+    }
+
     try {
       await api(`/admin/users/${assigningId}/clubs`, {
         method: "PATCH",
-        body: { managedClubs: assignManagedClubs },
+        body: { managedClubs: assignManagedClub ? [assignManagedClub] : [] },
       })
       setAssignDialogOpen(false)
       await fetchData()
@@ -441,12 +472,21 @@ export default function AdminClubAdminsPage() {
                       </TableCell>
                       <TableCell>
                         {admin.managedClubs.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap items-center gap-1">
                             {admin.managedClubs.map((clubId) => (
                               <Badge key={clubId} variant="outline" className="text-xs">
                                 {clubNameById(clubId)}
                               </Badge>
                             ))}
+                            {admin.managedClubs.length > 1 && (
+                              <span
+                                className="inline-flex items-center gap-1 text-xs text-destructive"
+                                title="ผู้ดูแลชมรมควรดูแลได้เพียง 1 ชมรม กรุณาแก้ไข"
+                              >
+                                <TriangleAlert className="h-3.5 w-3.5" />
+                                มีชมรมที่ดูแลมากกว่า 1 แห่ง
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">ยังไม่ได้กำหนด</span>
@@ -537,6 +577,7 @@ export default function AdminClubAdminsPage() {
               <Input
                 id="ca-password"
                 type="password"
+                placeholder="ตั้งรหัสผ่าน 6 ตัวขึ้นไป"
                 value={createForm.password}
                 onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
               />
@@ -550,25 +591,25 @@ export default function AdminClubAdminsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel>ชมรมที่ดูแล</FieldLabel>
-              <div className="space-y-2 max-h-40 overflow-y-auto rounded-md border border-border p-3">
-                {clubs.map((club) => (
-                  <label key={club.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={createForm.managedClubs.includes(club.id)}
-                      onCheckedChange={(checked) =>
-                        setCreateForm((f) => ({
-                          ...f,
-                          managedClubs: checked
-                            ? [...f.managedClubs, club.id]
-                            : f.managedClubs.filter((id) => id !== club.id),
-                        }))
-                      }
-                    />
-                    {club.name}
-                  </label>
-                ))}
-              </div>
+              <FieldLabel htmlFor="ca-managed-club">ชมรมที่ดูแล</FieldLabel>
+              <Select
+                value={createForm.managedClub || NO_CLUB_VALUE}
+                onValueChange={(value) =>
+                  setCreateForm((f) => ({ ...f, managedClub: value === NO_CLUB_VALUE ? "" : value }))
+                }
+              >
+                <SelectTrigger id="ca-managed-club" className="w-full">
+                  <SelectValue placeholder="เลือกชมรม" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CLUB_VALUE}>ไม่ระบุ</SelectItem>
+                  {clubs.map((club) => (
+                    <SelectItem key={club.id} value={club.id}>
+                      {club.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </FieldGroup>
 
@@ -632,18 +673,25 @@ export default function AdminClubAdminsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel>ชมรมที่ดูแล</FieldLabel>
-              <div className="space-y-2 max-h-40 overflow-y-auto rounded-md border border-border p-3">
-                {clubs.map((club) => (
-                  <label key={club.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={editForm.managedClubs.includes(club.id)}
-                      onCheckedChange={(checked) => toggleEditManagedClub(club.id, checked === true)}
-                    />
-                    {club.name}
-                  </label>
-                ))}
-              </div>
+              <FieldLabel htmlFor="ca-edit-managed-club">ชมรมที่ดูแล</FieldLabel>
+              <Select
+                value={editForm.managedClub || NO_CLUB_VALUE}
+                onValueChange={(value) =>
+                  setEditForm((f) => ({ ...f, managedClub: value === NO_CLUB_VALUE ? "" : value }))
+                }
+              >
+                <SelectTrigger id="ca-edit-managed-club" className="w-full">
+                  <SelectValue placeholder="เลือกชมรม" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CLUB_VALUE}>ไม่ระบุ</SelectItem>
+                  {clubs.map((club) => (
+                    <SelectItem key={club.id} value={club.id}>
+                      {club.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </FieldGroup>
 
@@ -672,17 +720,22 @@ export default function AdminClubAdminsPage() {
             <DialogDescription>เลือกชมรมที่ผู้ดูแลชมรมนี้จะดูแล</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2 max-h-64 overflow-y-auto rounded-md border border-border p-3">
-            {clubs.map((club) => (
-              <label key={club.id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={assignManagedClubs.includes(club.id)}
-                  onCheckedChange={(checked) => toggleAssignedClub(club.id, checked === true)}
-                />
-                {club.name}
-              </label>
-            ))}
-          </div>
+          <Select
+            value={assignManagedClub || NO_CLUB_VALUE}
+            onValueChange={(value) => setAssignManagedClub(value === NO_CLUB_VALUE ? "" : value)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="เลือกชมรม" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CLUB_VALUE}>ไม่ระบุ</SelectItem>
+              {clubs.map((club) => (
+                <SelectItem key={club.id} value={club.id}>
+                  {club.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {assignError && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { api } from "@/lib/api"
+import { api, apiUpload, resolveImageUrl } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { CLUB_CATEGORIES, type Club, type ClubCategory } from "@/lib/types"
 import {
@@ -41,7 +41,8 @@ import {
   Users,
   Eye,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ImageUp
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -56,6 +57,14 @@ interface ClubsResponse {
   message?: string
   data: {
     clubs: RawClub[]
+  }
+}
+
+interface ClubResponse {
+  success: boolean
+  message?: string
+  data: {
+    club: RawClub
   }
 }
 
@@ -112,9 +121,13 @@ function clubToFormState(club: Club): ClubFormState {
   }
 }
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5MB, matches the backend's multer limit
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
 // Builds the POST/PATCH body: required fields always included, optional
 // fields included only when the admin actually provided a value. Never
-// includes memberCount/createdBy — those are server-managed.
+// includes memberCount/createdBy — those are server-managed. The image is
+// never sent here — it's uploaded separately via POST /clubs/:id/image.
 function buildClubPayload(form: ClubFormState) {
   const payload: Record<string, unknown> = {
     name: form.name.trim(),
@@ -123,7 +136,6 @@ function buildClubPayload(form: ClubFormState) {
     maxMembers: Number(form.maxMembers),
   }
 
-  if (form.image.trim()) payload.image = form.image.trim()
   if (form.advisorName.trim()) payload.advisorName = form.advisorName.trim()
   if (form.contactEmail.trim()) payload.contactEmail = form.contactEmail.trim()
   if (form.contactPhone.trim()) payload.contactPhone = form.contactPhone.trim()
@@ -159,6 +171,41 @@ export default function AdminClubsPage() {
   const [form, setForm] = useState<ClubFormState>(emptyClubForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const imagePreviewUrlRef = useRef<string | null>(null)
+
+  // Revoke the previous object URL whenever the preview changes or the
+  // component unmounts, so we don't leak blob URLs.
+  useEffect(() => {
+    imagePreviewUrlRef.current = imagePreviewUrl
+    return () => {
+      if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current)
+    }
+  }, [imagePreviewUrl])
+
+  const handleImageSelect = (file: File | null) => {
+    setImageError(null)
+    if (!file) {
+      setImageFile(null)
+      setImagePreviewUrl(null)
+      return
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageError("รองรับเฉพาะไฟล์รูปภาพ JPEG, PNG, WEBP หรือ GIF")
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError("ขนาดไฟล์ต้องไม่เกิน 5MB")
+      return
+    }
+
+    setImageFile(file)
+    setImagePreviewUrl(URL.createObjectURL(file))
+  }
 
   const fetchClubs = useCallback(async () => {
     setIsLoading(true)
@@ -204,11 +251,21 @@ export default function AdminClubsPage() {
     }
   }
 
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const resetImageState = () => {
+    setImageFile(null)
+    setImagePreviewUrl(null)
+    setImageError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
   const openCreateDialog = () => {
     setFormMode("create")
     setEditingClubId(null)
     setForm(emptyClubForm)
     setFormError(null)
+    resetImageState()
     setFormDialogOpen(true)
   }
 
@@ -217,6 +274,7 @@ export default function AdminClubsPage() {
     setEditingClubId(club.id)
     setForm(clubToFormState(club))
     setFormError(null)
+    resetImageState()
     setFormDialogOpen(true)
   }
 
@@ -225,11 +283,21 @@ export default function AdminClubsPage() {
     setFormError(null)
     try {
       const payload = buildClubPayload(form)
+      let clubId = editingClubId
+
       if (formMode === "create") {
-        await api("/clubs", { method: "POST", body: payload })
+        const response = await api<ClubResponse>("/clubs", { method: "POST", body: payload })
+        clubId = response.data?.club ? normalizeClub(response.data.club).id : null
       } else if (editingClubId) {
         await api(`/clubs/${editingClubId}`, { method: "PATCH", body: payload })
       }
+
+      if (imageFile && clubId) {
+        const formData = new FormData()
+        formData.append("image", imageFile)
+        await apiUpload(`/clubs/${clubId}/image`, formData)
+      }
+
       setFormDialogOpen(false)
       await fetchClubs()
     } catch (err) {
@@ -244,7 +312,8 @@ export default function AdminClubsPage() {
     form.description.trim() !== "" &&
     form.category !== "" &&
     form.maxMembers.trim() !== "" &&
-    Number(form.maxMembers) > 0
+    Number(form.maxMembers) > 0 &&
+    !imageError
 
   // GET /clubs is not role-filtered server-side, so club admins only see
   // clubs they manage by scoping the list here.
@@ -326,9 +395,18 @@ export default function AdminClubsPage() {
                       <TableRow key={club.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <Users className="h-5 w-5 text-primary" />
-                            </div>
+                            {club.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={resolveImageUrl(club.image)}
+                                alt=""
+                                className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <Users className="h-5 w-5 text-primary" />
+                              </div>
+                            )}
                             <div>
                               <div className="font-medium text-foreground">{club.name}</div>
                               <div className="text-sm text-muted-foreground truncate max-w-[200px]">
@@ -457,12 +535,32 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-image">รูปภาพ (URL)</FieldLabel>
-              <Input
-                id="club-image"
-                value={form.image}
-                onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-              />
+              <FieldLabel htmlFor="club-image">รูปภาพ</FieldLabel>
+              <div className="flex items-center gap-4">
+                {imagePreviewUrl || form.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imagePreviewUrl ?? resolveImageUrl(form.image)}
+                    alt=""
+                    className="w-16 h-16 rounded-lg object-cover flex-shrink-0 border border-border"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <ImageUp className="h-6 w-6 text-primary" />
+                  </div>
+                )}
+                <Input
+                  id="club-image"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(e) => handleImageSelect(e.target.files?.[0] ?? null)}
+                  className="flex-1"
+                />
+              </div>
+              {imageError && (
+                <p className="text-sm text-destructive">{imageError}</p>
+              )}
             </Field>
             <Field>
               <FieldLabel htmlFor="club-advisor">อาจารย์ที่ปรึกษา</FieldLabel>

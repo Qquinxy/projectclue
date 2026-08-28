@@ -19,6 +19,10 @@ const faculties = [
   "คณะสถาปัตยกรรมศาสตร์",
 ]
 
+// 11 digits, a dash, then 1 digit (e.g. 67543206105-8) — must match the
+// backend's registration-only studentId validation.
+const STUDENT_ID_PATTERN = /^[0-9]{11}-[0-9]$/
+
 export default function RegisterPage() {
   const router = useRouter()
   const { register } = useAuth()
@@ -55,6 +59,11 @@ export default function RegisterPage() {
     ]
     if (requiredFields.some((field) => !formData[field].trim())) {
       setError("กรุณากรอกข้อมูลให้ครบทุกช่อง")
+      return
+    }
+
+    if (!STUDENT_ID_PATTERN.test(formData.studentId.trim())) {
+      setError("รหัสนักศึกษาต้องเป็นตัวเลข 11 หลัก ตามด้วย - และตัวเลข 1 หลัก เช่น 67543206105-8")
       return
     }
 
@@ -115,7 +124,7 @@ export default function RegisterPage() {
                 <Input
                   id="studentId"
                   className="numeric-font"
-                  placeholder="64010001"
+                  placeholder="12345678901-2"
                   value={formData.studentId}
                   onChange={(e) => handleChange("studentId", e.target.value)}
                 />
@@ -198,7 +207,7 @@ export default function RegisterPage() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="อย่างน้อย 6 ตัวอักษร"
+                    placeholder="ตั้งรหัสผ่าน 6 ตัวขึ้นไป"
                     value={formData.password}
                     onChange={(e) => handleChange("password", e.target.value)}
                   />

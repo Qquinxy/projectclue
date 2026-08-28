@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Users } from "lucide-react"
 import type { Club } from "@/lib/types"
 import { CLUB_CATEGORIES } from "@/lib/types"
+import { resolveImageUrl } from "@/lib/api"
 
 interface ClubCardProps {
   club: Club
@@ -14,14 +15,23 @@ export function ClubCard({ club }: ClubCardProps) {
 
   return (
     <Link href={`/clubs/${club.id}`} className="club-card-link">
-      {/* Outer card is text-only by design: name, description, category,
-          member count and location. No club image here. */}
+      {/* Icon badge falls back to a generic Users icon when the club has no
+          uploaded image, so cards without a photo keep their prior look. */}
       <Card className="club-card-surface h-full">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-              <Users className="h-5 w-5 text-primary" />
-            </div>
+            {club.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={resolveImageUrl(club.image)}
+                alt=""
+                className="h-10 w-10 rounded-lg object-cover shrink-0"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+            )}
             <Badge variant="secondary" className="text-xs shrink-0">
               {category?.label}
             </Badge>
