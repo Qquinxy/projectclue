@@ -22,15 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { api } from "@/lib/api"
+import { cn } from "@/lib/utils"
+import { getPasswordError, getPasswordRuleStates, isStrongPassword } from "@/lib/password"
 import type { Club } from "@/lib/types"
 import {
   Search,
@@ -41,13 +37,16 @@ import {
   Building2,
   Loader2,
   AlertCircle,
-  TriangleAlert
+  Check,
+  X,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldOff
 } from "lucide-react"
 
-// A club_admin manages at most one club (enforced client- and server-side).
-// A dedicated sentinel is used for "no club assigned" since the underlying
-// Select primitive can't represent an empty-string item value.
-const NO_CLUB_VALUE = "none"
+// A club_admin may manage any number of clubs, and a club may have more than
+// one admin — the checklists below are plain multi-select with no cardinality
+// limit, matching the backend (User.managedClubs / adminUser.validator.js).
 
 // --- Clubs (for club-name lookups and the managed-clubs checklist) ---
 
@@ -79,6 +78,9 @@ interface RawClubAdmin {
   email: string
   phone?: string
   managedClubs?: string[]
+  emailVerified?: boolean
+  elevatedAdmin?: boolean
+  elevatedAdminPending?: boolean
 }
 
 interface ClubAdmin {
@@ -89,6 +91,11 @@ interface ClubAdmin {
   email: string
   phone: string
   managedClubs: string[]
+  // Absent on accounts created before email verification existed.
+  emailVerified?: boolean
+  // Super Admin-equivalent appointment: active vs. awaiting email confirmation.
+  elevatedAdmin: boolean
+  elevatedAdminPending: boolean
 }
 
 interface UsersResponse {
@@ -110,6 +117,9 @@ function normalizeClubAdmin(user: RawClubAdmin): ClubAdmin {
     email: user.email,
     phone: user.phone ?? "",
     managedClubs: (user.managedClubs ?? []).map(String),
+    emailVerified: user.emailVerified,
+    elevatedAdmin: user.elevatedAdmin === true,
+    elevatedAdminPending: user.elevatedAdminPending === true,
   }
 }
 
@@ -120,7 +130,7 @@ interface CreateFormState {
   email: string
   password: string
   phone: string
-  managedClub: string
+  managedClubs: string[]
 }
 
 const emptyCreateForm: CreateFormState = {
@@ -130,7 +140,7 @@ const emptyCreateForm: CreateFormState = {
   email: "",
   password: "",
   phone: "",
-  managedClub: "",
+  managedClubs: [],
 }
 
 function buildCreatePayload(form: CreateFormState) {
@@ -142,7 +152,7 @@ function buildCreatePayload(form: CreateFormState) {
     password: form.password,
   }
   if (form.phone.trim()) payload.phone = form.phone.trim()
-  if (form.managedClub) payload.managedClubs = [form.managedClub]
+  if (form.managedClubs.length > 0) payload.managedClubs = form.managedClubs
   return payload
 }
 
@@ -151,7 +161,7 @@ interface EditFormState {
   lastName: string
   email: string
   phone: string
-  managedClub: string
+  managedClubs: string[]
 }
 
 function clubAdminToEditForm(admin: ClubAdmin): EditFormState {
@@ -160,8 +170,14 @@ function clubAdminToEditForm(admin: ClubAdmin): EditFormState {
     lastName: admin.lastName,
     email: admin.email,
     phone: admin.phone,
-    managedClub: admin.managedClubs[0] ?? "",
+    managedClubs: admin.managedClubs,
   }
+}
+
+// Order-insensitive comparison, so the managed-clubs endpoint is only called
+// when the selection actually changed.
+function sameClubIds(a: string[], b: string[]) {
+  return a.length === b.length && a.every((id) => b.includes(id))
 }
 
 export default function AdminClubAdminsPage() {
@@ -201,14 +217,6 @@ export default function AdminClubAdminsPage() {
     admin.email.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  // Client-side pre-check for the 1:1 rule (a club may have only one
-  // admin) — immediate feedback before the round-trip; the backend's own
-  // check (409) remains the source of truth for race conditions.
-  const findConflictingAdmin = (clubId: string, excludeAdminId?: string) =>
-    clubAdmins.find(
-      (admin) => admin.id !== excludeAdminId && admin.managedClubs.includes(clubId)
-    ) ?? null
-
   // --- Create ---
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm)
@@ -221,17 +229,25 @@ export default function AdminClubAdminsPage() {
     setCreateDialogOpen(true)
   }
 
+  const toggleCreateManagedClub = (clubId: string, checked: boolean) => {
+    setCreateForm((f) => ({
+      ...f,
+      managedClubs: checked
+        ? [...f.managedClubs, clubId]
+        : f.managedClubs.filter((id) => id !== clubId),
+    }))
+  }
+
   const handleCreate = async () => {
     setIsCreating(true)
     setCreateError(null)
 
-    if (createForm.managedClub) {
-      const conflict = findConflictingAdmin(createForm.managedClub)
-      if (conflict) {
-        setCreateError(`ชมรมนี้มี ${conflict.firstName} ${conflict.lastName} เป็นผู้ดูแลอยู่แล้ว`)
-        setIsCreating(false)
-        return
-      }
+    // Same policy the backend enforces (utils/password.js).
+    const passwordError = getPasswordError(createForm.password)
+    if (passwordError) {
+      setCreateError(passwordError)
+      setIsCreating(false)
+      return
     }
 
     try {
@@ -250,37 +266,37 @@ export default function AdminClubAdminsPage() {
     createForm.firstName.trim() !== "" &&
     createForm.lastName.trim() !== "" &&
     createForm.email.trim() !== "" &&
-    createForm.password.length >= 6
+    isStrongPassword(createForm.password)
 
   // --- Edit ---
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<EditFormState>({ firstName: "", lastName: "", email: "", phone: "", managedClub: "" })
-  const [editOriginalManagedClub, setEditOriginalManagedClub] = useState("")
+  const [editForm, setEditForm] = useState<EditFormState>({ firstName: "", lastName: "", email: "", phone: "", managedClubs: [] })
+  const [editOriginalManagedClubs, setEditOriginalManagedClubs] = useState<string[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
   const openEditDialog = (admin: ClubAdmin) => {
     setEditingId(admin.id)
     setEditForm(clubAdminToEditForm(admin))
-    setEditOriginalManagedClub(admin.managedClubs[0] ?? "")
+    setEditOriginalManagedClubs(admin.managedClubs)
     setEditError(null)
     setEditDialogOpen(true)
+  }
+
+  const toggleEditManagedClub = (clubId: string, checked: boolean) => {
+    setEditForm((f) => ({
+      ...f,
+      managedClubs: checked
+        ? [...f.managedClubs, clubId]
+        : f.managedClubs.filter((id) => id !== clubId),
+    }))
   }
 
   const handleEdit = async () => {
     if (!editingId) return
     setIsEditing(true)
     setEditError(null)
-
-    if (editForm.managedClub && editForm.managedClub !== editOriginalManagedClub) {
-      const conflict = findConflictingAdmin(editForm.managedClub, editingId)
-      if (conflict) {
-        setEditError(`ชมรมนี้มี ${conflict.firstName} ${conflict.lastName} เป็นผู้ดูแลอยู่แล้ว`)
-        setIsEditing(false)
-        return
-      }
-    }
 
     try {
       await api(`/admin/users/${editingId}`, {
@@ -295,10 +311,10 @@ export default function AdminClubAdminsPage() {
 
       // Managed clubs live on a separate endpoint — only call it if the
       // admin actually changed the selection in this dialog.
-      if (editForm.managedClub !== editOriginalManagedClub) {
+      if (!sameClubIds(editForm.managedClubs, editOriginalManagedClubs)) {
         await api(`/admin/users/${editingId}/clubs`, {
           method: "PATCH",
-          body: { managedClubs: editForm.managedClub ? [editForm.managedClub] : [] },
+          body: { managedClubs: editForm.managedClubs },
         })
       }
 
@@ -316,18 +332,24 @@ export default function AdminClubAdminsPage() {
     editForm.lastName.trim() !== "" &&
     editForm.email.trim() !== ""
 
-  // --- Assign managed club ---
+  // --- Assign managed clubs ---
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assigningId, setAssigningId] = useState<string | null>(null)
-  const [assignManagedClub, setAssignManagedClub] = useState("")
+  const [assignManagedClubs, setAssignManagedClubs] = useState<string[]>([])
   const [isAssigning, setIsAssigning] = useState(false)
   const [assignError, setAssignError] = useState<string | null>(null)
 
   const openAssignDialog = (admin: ClubAdmin) => {
     setAssigningId(admin.id)
-    setAssignManagedClub(admin.managedClubs[0] ?? "")
+    setAssignManagedClubs(admin.managedClubs)
     setAssignError(null)
     setAssignDialogOpen(true)
+  }
+
+  const toggleAssignedClub = (clubId: string, checked: boolean) => {
+    setAssignManagedClubs((current) =>
+      checked ? [...current, clubId] : current.filter((id) => id !== clubId)
+    )
   }
 
   const handleAssign = async () => {
@@ -335,19 +357,10 @@ export default function AdminClubAdminsPage() {
     setIsAssigning(true)
     setAssignError(null)
 
-    if (assignManagedClub) {
-      const conflict = findConflictingAdmin(assignManagedClub, assigningId)
-      if (conflict) {
-        setAssignError(`ชมรมนี้มี ${conflict.firstName} ${conflict.lastName} เป็นผู้ดูแลอยู่แล้ว`)
-        setIsAssigning(false)
-        return
-      }
-    }
-
     try {
       await api(`/admin/users/${assigningId}/clubs`, {
         method: "PATCH",
-        body: { managedClubs: assignManagedClub ? [assignManagedClub] : [] },
+        body: { managedClubs: assignManagedClubs },
       })
       setAssignDialogOpen(false)
       await fetchData()
@@ -355,6 +368,47 @@ export default function AdminClubAdminsPage() {
       setAssignError(err instanceof Error ? err.message : "ไม่สามารถบันทึกชมรมที่ดูแลได้")
     } finally {
       setIsAssigning(false)
+    }
+  }
+
+  // --- Super Admin-equivalent elevation (max 2, backend-enforced) ---
+  const elevatedCount = clubAdmins.filter((a) => a.elevatedAdmin || a.elevatedAdminPending).length
+  const [elevatingId, setElevatingId] = useState<string | null>(null)
+  const [elevationMessage, setElevationMessage] = useState<string | null>(null)
+  const [elevationError, setElevationError] = useState<string | null>(null)
+
+  const handleElevate = async (admin: ClubAdmin) => {
+    setElevatingId(admin.id)
+    setElevationError(null)
+    setElevationMessage(null)
+    try {
+      const response = await api<{ message?: string }>(`/admin/users/${admin.id}/elevate`, {
+        method: "POST",
+      })
+      setElevationMessage(
+        response.message ??
+          "ส่งอีเมลยืนยันการแต่งตั้งแล้ว สิทธิ์จะมีผลเมื่อผู้ดูแลชมรมยืนยันทางอีเมล"
+      )
+      await fetchData()
+    } catch (err) {
+      setElevationError(err instanceof Error ? err.message : "ไม่สามารถแต่งตั้งสิทธิ์ได้")
+    } finally {
+      setElevatingId(null)
+    }
+  }
+
+  const handleRevokeElevation = async (admin: ClubAdmin) => {
+    setElevatingId(admin.id)
+    setElevationError(null)
+    setElevationMessage(null)
+    try {
+      await api(`/admin/users/${admin.id}/elevate`, { method: "DELETE" })
+      setElevationMessage("ยกเลิกสิทธิ์เทียบเท่าผู้ดูแลระบบแล้ว")
+      await fetchData()
+    } catch (err) {
+      setElevationError(err instanceof Error ? err.message : "ไม่สามารถยกเลิกสิทธิ์ได้")
+    } finally {
+      setElevatingId(null)
     }
   }
 
@@ -380,7 +434,7 @@ export default function AdminClubAdminsPage() {
       setSelectedId(null)
       await fetchData()
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "ไม่สามารถลบบัญชีได้")
+      setDeleteError(err instanceof Error ? err.message : "ไม่สามารถถอดถอนผู้ดูแลชมรมได้")
     } finally {
       setIsDeleting(false)
     }
@@ -398,6 +452,36 @@ export default function AdminClubAdminsPage() {
           เพิ่มผู้ดูแลชมรม
         </Button>
       </div>
+
+      {/* Super Admin-equivalent appointments: the backend enforces the cap of
+          2 (counting active holders and pending appointments alike); this is
+          only a status readout. */}
+      <div className="rounded-lg border bg-muted/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm">
+          <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-foreground">
+            ผู้ดูแลเทียบเท่าผู้ดูแลระบบ{" "}
+            <span className="numeric-font font-medium">{elevatedCount}</span>
+            <span className="text-muted-foreground"> / 2 คน</span>
+          </span>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          สิทธิ์จะมีผลหลังผู้ได้รับแต่งตั้งยืนยันทางอีเมลเท่านั้น
+        </span>
+      </div>
+
+      {elevationMessage && (
+        <div className="rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          {elevationMessage}
+        </div>
+      )}
+
+      {elevationError && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{elevationError}</span>
+        </div>
+      )}
 
       {/* Search */}
       <Card>
@@ -443,6 +527,7 @@ export default function AdminClubAdminsPage() {
                     <TableHead>อีเมล</TableHead>
                     <TableHead>เบอร์โทรศัพท์</TableHead>
                     <TableHead>ชมรมที่ดูแล</TableHead>
+                    <TableHead>สิทธิ์</TableHead>
                     <TableHead className="text-right">การดำเนินการ</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -478,22 +563,58 @@ export default function AdminClubAdminsPage() {
                                 {clubNameById(clubId)}
                               </Badge>
                             ))}
-                            {admin.managedClubs.length > 1 && (
-                              <span
-                                className="inline-flex items-center gap-1 text-xs text-destructive"
-                                title="ผู้ดูแลชมรมควรดูแลได้เพียง 1 ชมรม กรุณาแก้ไข"
-                              >
-                                <TriangleAlert className="h-3.5 w-3.5" />
-                                มีชมรมที่ดูแลมากกว่า 1 แห่ง
-                              </span>
-                            )}
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">ยังไม่ได้กำหนด</span>
                         )}
                       </TableCell>
                       <TableCell>
+                        <div className="flex flex-col items-start gap-1">
+                          {admin.elevatedAdmin ? (
+                            <Badge className="text-xs gap-1 bg-primary/10 text-primary">
+                              <ShieldCheck className="h-3 w-3" />
+                              เทียบเท่าผู้ดูแลระบบ
+                            </Badge>
+                          ) : admin.elevatedAdminPending ? (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <ShieldAlert className="h-3 w-3" />
+                              รอยืนยันทางอีเมล
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">ผู้ดูแลชมรม</span>
+                          )}
+                          {admin.emailVerified === false && (
+                            <span className="text-xs text-destructive">ยังไม่ยืนยันอีเมล</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center justify-end gap-2">
+                          {admin.elevatedAdmin || admin.elevatedAdminPending ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="ยกเลิกสิทธิ์เทียบเท่าผู้ดูแลระบบ"
+                              onClick={() => handleRevokeElevation(admin)}
+                              disabled={elevatingId === admin.id}
+                            >
+                              <ShieldOff className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={
+                                elevatedCount >= 2
+                                  ? "มีผู้ดูแลเทียบเท่าครบ 2 คนแล้ว"
+                                  : "แต่งตั้งเป็นผู้ดูแลเทียบเท่าผู้ดูแลระบบ"
+                              }
+                              onClick={() => handleElevate(admin)}
+                              disabled={elevatingId === admin.id || elevatedCount >= 2}
+                            >
+                              <ShieldCheck className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -508,6 +629,7 @@ export default function AdminClubAdminsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="ถอดถอนผู้ดูแลชมรม (บัญชียังคงอยู่)"
                             onClick={() => handleDelete(admin.id)}
                             className="text-destructive hover:text-destructive"
                           >
@@ -577,10 +699,28 @@ export default function AdminClubAdminsPage() {
               <Input
                 id="ca-password"
                 type="password"
-                placeholder="ตั้งรหัสผ่าน 6 ตัวขึ้นไป"
+                placeholder="เช่น ProjectClue@2026"
                 value={createForm.password}
                 onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
               />
+              <ul className="mt-1 space-y-1">
+                {getPasswordRuleStates(createForm.password).map((rule) => (
+                  <li
+                    key={rule.id}
+                    className={cn(
+                      "flex items-center gap-2 text-xs",
+                      rule.passed ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {rule.passed ? (
+                      <Check className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <X className="h-3 w-3 shrink-0 opacity-50" />
+                    )}
+                    <span>{rule.label}</span>
+                  </li>
+                ))}
+              </ul>
             </Field>
             <Field>
               <FieldLabel htmlFor="ca-phone">เบอร์โทรศัพท์</FieldLabel>
@@ -591,25 +731,18 @@ export default function AdminClubAdminsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="ca-managed-club">ชมรมที่ดูแล</FieldLabel>
-              <Select
-                value={createForm.managedClub || NO_CLUB_VALUE}
-                onValueChange={(value) =>
-                  setCreateForm((f) => ({ ...f, managedClub: value === NO_CLUB_VALUE ? "" : value }))
-                }
-              >
-                <SelectTrigger id="ca-managed-club" className="w-full">
-                  <SelectValue placeholder="เลือกชมรม" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CLUB_VALUE}>ไม่ระบุ</SelectItem>
-                  {clubs.map((club) => (
-                    <SelectItem key={club.id} value={club.id}>
-                      {club.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FieldLabel>ชมรมที่ดูแล (เลือกได้มากกว่า 1 ชมรม)</FieldLabel>
+              <div className="space-y-2 max-h-40 overflow-y-auto rounded-md border border-border p-3">
+                {clubs.map((club) => (
+                  <label key={club.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={createForm.managedClubs.includes(club.id)}
+                      onCheckedChange={(checked) => toggleCreateManagedClub(club.id, checked === true)}
+                    />
+                    {club.name}
+                  </label>
+                ))}
+              </div>
             </Field>
           </FieldGroup>
 
@@ -673,25 +806,18 @@ export default function AdminClubAdminsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="ca-edit-managed-club">ชมรมที่ดูแล</FieldLabel>
-              <Select
-                value={editForm.managedClub || NO_CLUB_VALUE}
-                onValueChange={(value) =>
-                  setEditForm((f) => ({ ...f, managedClub: value === NO_CLUB_VALUE ? "" : value }))
-                }
-              >
-                <SelectTrigger id="ca-edit-managed-club" className="w-full">
-                  <SelectValue placeholder="เลือกชมรม" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CLUB_VALUE}>ไม่ระบุ</SelectItem>
-                  {clubs.map((club) => (
-                    <SelectItem key={club.id} value={club.id}>
-                      {club.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FieldLabel>ชมรมที่ดูแล (เลือกได้มากกว่า 1 ชมรม)</FieldLabel>
+              <div className="space-y-2 max-h-40 overflow-y-auto rounded-md border border-border p-3">
+                {clubs.map((club) => (
+                  <label key={club.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={editForm.managedClubs.includes(club.id)}
+                      onCheckedChange={(checked) => toggleEditManagedClub(club.id, checked === true)}
+                    />
+                    {club.name}
+                  </label>
+                ))}
+              </div>
             </Field>
           </FieldGroup>
 
@@ -717,25 +843,22 @@ export default function AdminClubAdminsPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>กำหนดชมรมที่ดูแล</DialogTitle>
-            <DialogDescription>เลือกชมรมที่ผู้ดูแลชมรมนี้จะดูแล</DialogDescription>
+            <DialogDescription>
+              เลือกชมรมที่ผู้ดูแลชมรมนี้จะดูแล (เลือกได้มากกว่า 1 ชมรม)
+            </DialogDescription>
           </DialogHeader>
 
-          <Select
-            value={assignManagedClub || NO_CLUB_VALUE}
-            onValueChange={(value) => setAssignManagedClub(value === NO_CLUB_VALUE ? "" : value)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="เลือกชมรม" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_CLUB_VALUE}>ไม่ระบุ</SelectItem>
-              {clubs.map((club) => (
-                <SelectItem key={club.id} value={club.id}>
-                  {club.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2 max-h-64 overflow-y-auto rounded-md border border-border p-3">
+            {clubs.map((club) => (
+              <label key={club.id} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={assignManagedClubs.includes(club.id)}
+                  onCheckedChange={(checked) => toggleAssignedClub(club.id, checked === true)}
+                />
+                {club.name}
+              </label>
+            ))}
+          </div>
 
           {assignError && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -754,13 +877,16 @@ export default function AdminClubAdminsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Remove-position confirmation. This revokes the club_admin role only —
+          the user account, its login, and its club/activity history are kept. */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>ยืนยันการลบบัญชีผู้ดูแลชมรม</DialogTitle>
+            <DialogTitle>ยืนยันการถอดถอนผู้ดูแลชมรม</DialogTitle>
             <DialogDescription>
-              คุณต้องการลบบัญชีผู้ดูแลชมรมนี้หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้
+              บัญชีนี้จะถูกเปลี่ยนสถานะกลับเป็นนักศึกษา และจะไม่สามารถเข้าถึงเมนูผู้ดูแลได้อีก
+              <br />
+              บัญชีผู้ใช้ ประวัติการเข้าร่วมชมรมและกิจกรรม รวมถึงชั่วโมงจิตอาสาจะยังคงอยู่ ไม่ถูกลบ
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
@@ -773,7 +899,7 @@ export default function AdminClubAdminsPage() {
               ยกเลิก
             </Button>
             <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
-              {isDeleting ? "กำลังลบ..." : "ลบบัญชี"}
+              {isDeleting ? "กำลังถอดถอน..." : "ถอดถอนผู้ดูแลชมรม"}
             </Button>
           </DialogFooter>
         </DialogContent>

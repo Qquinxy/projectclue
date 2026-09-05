@@ -61,7 +61,17 @@ export interface Student {
   role: "student" | "club_admin" | "superadmin"
   profileImage: string
   totalVolunteerHours: number
+  // A club_admin may manage any number of clubs.
   managedClubs: string[]
+  // Absent on accounts created before email verification existed; `false`
+  // means the account cannot log in until the emailed link is opened.
+  emailVerified?: boolean
+  emailVerifiedAt?: string | null
+  // Super Admin-equivalent appointment held by a club_admin. Only
+  // `elevatedAdmin === true` (confirmed by email) grants the permissions;
+  // `elevatedAdminPending` is an appointment still awaiting confirmation.
+  elevatedAdmin?: boolean
+  elevatedAdminPending?: boolean
 }
 
 // Binary club membership only — the backend has no membership role or

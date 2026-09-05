@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { api } from "@/lib/api"
+import { api, apiDownload } from "@/lib/api"
 import type { Activity, ParticipationStatus } from "@/lib/types"
 import {
   ArrowLeft,
@@ -23,7 +23,9 @@ import {
   XCircle,
   Clock,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Download,
+  FileSpreadsheet
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -84,6 +86,8 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
   const [error, setError] = useState<string | null>(null)
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [exportFormat, setExportFormat] = useState<"csv" | "xlsx" | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setIsLoading(true)
@@ -123,6 +127,24 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
     }
   }
 
+  // Export is authorized server-side: the backend re-checks that this
+  // activity's club is one the signed-in admin manages, so a club_admin
+  // cannot export another club's activity by editing the URL.
+  const handleExport = async (format: "csv" | "xlsx") => {
+    setExportFormat(format)
+    setExportError(null)
+    try {
+      await apiDownload(
+        `/activities/${id}/participants/export?format=${format}`,
+        `participants.${format}`
+      )
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "ไม่สามารถดาวน์โหลดไฟล์ได้")
+    } finally {
+      setExportFormat(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Link
@@ -133,12 +155,48 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
         กลับไปหน้าจัดการกิจกรรม
       </Link>
 
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          {activity ? `ผู้เข้าร่วม: ${activity.title}` : "รายชื่อผู้เข้าร่วม"}
-        </h1>
-        <p className="text-muted-foreground">ยืนยันการเข้าร่วมและมอบชั่วโมงจิตอาสา</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {activity ? `ผู้เข้าร่วม: ${activity.title}` : "รายชื่อผู้เข้าร่วม"}
+          </h1>
+          <p className="text-muted-foreground">ยืนยันการเข้าร่วมและมอบชั่วโมงจิตอาสา</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => handleExport("csv")}
+            disabled={exportFormat !== null || isLoading}
+          >
+            {exportFormat === "csv" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            ดาวน์โหลด CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleExport("xlsx")}
+            disabled={exportFormat !== null || isLoading}
+          >
+            {exportFormat === "xlsx" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+            )}
+            ดาวน์โหลด Excel
+          </Button>
+        </div>
       </div>
+
+      {exportError && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{exportError}</span>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

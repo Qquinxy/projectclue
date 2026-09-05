@@ -39,7 +39,10 @@ export default function AdminLayout({
   const [open, setOpen] = useState(false)
 
   const isAuthorized = user?.role === "superadmin" || user?.role === "club_admin"
-  const isSuperadmin = user?.role === "superadmin"
+  // A club_admin holding a confirmed Super Admin-equivalent appointment sees
+  // the same admin surface as a superadmin. The backend enforces this
+  // independently — this only keeps the UI consistent with it.
+  const isSuperadmin = user?.role === "superadmin" || user?.elevatedAdmin === true
   const isSettingsRoute = pathname === "/admin/settings"
 
   useEffect(() => {

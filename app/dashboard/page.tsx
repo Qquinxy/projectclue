@@ -56,13 +56,14 @@ interface ActivityParticipationItem {
   registeredAt: string
   attendedAt: string | null
   hoursEarned: number
-  activity: Activity
+  // null when the referenced Activity was hard-deleted (legacy data).
+  activity: Activity | null
 }
 
 interface RawActivityParticipationItem extends Omit<ActivityParticipationItem, "id" | "activity"> {
   id?: string
   _id?: string
-  activity: Omit<Activity, "id"> & { id?: string; _id?: string }
+  activity: (Omit<Activity, "id"> & { id?: string; _id?: string }) | null
 }
 
 interface ActivitiesMeResponse {
@@ -75,11 +76,19 @@ interface ActivitiesMeResponse {
 
 // The API returns the activity keyed by _id, not id — normalize here so the
 // "/activities/:id" link below gets a real id.
+//
+// `activity` can come back null when the referenced Activity was hard-deleted
+// before that was blocked: the participation row survives (and still carries
+// the student's hoursEarned), but its activity no longer resolves. Those rows
+// are kept — dropping them would understate attendance — and are simply not
+// dereferenced.
 function normalizeParticipation(participation: RawActivityParticipationItem): ActivityParticipationItem {
   return {
     ...participation,
     id: participation.id ?? participation._id ?? "",
-    activity: { ...participation.activity, id: participation.activity.id ?? participation.activity._id ?? "" },
+    activity: participation.activity
+      ? { ...participation.activity, id: participation.activity.id ?? participation.activity._id ?? "" }
+      : null,
   }
 }
 

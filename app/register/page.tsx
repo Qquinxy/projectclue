@@ -2,15 +2,17 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
-import { Users, AlertCircle } from "lucide-react"
+import { getPasswordError, getPasswordRuleStates } from "@/lib/password"
+import { Users, AlertCircle, MailCheck, Check, X } from "lucide-react"
 
 const faculties = [
   "คณะวิศวกรรมศาสตร์",
@@ -24,9 +26,14 @@ const faculties = [
 const STUDENT_ID_PATTERN = /^[0-9]{11}-[0-9]$/
 
 export default function RegisterPage() {
-  const router = useRouter()
   const { register } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  // Set once registration succeeds; switches the card to the "check your
+  // email" state instead of navigating into the app.
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
+  const [verificationEmailSent, setVerificationEmailSent] = useState(true)
+  const [isResending, setIsResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState("")
   const [formData, setFormData] = useState({
     studentId: "",
     firstName: "",
@@ -72,14 +79,16 @@ export default function RegisterPage() {
       return
     }
 
-    if (formData.password.length < 6) {
-      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")
+    // Same policy the backend enforces (lib/password.ts mirrors utils/password.js).
+    const passwordError = getPasswordError(formData.password)
+    if (passwordError) {
+      setError(passwordError)
       return
     }
 
     setIsLoading(true)
 
-    const success = await register({
+    const result = await register({
       studentId: formData.studentId,
       firstName: formData.firstName,
       lastName: formData.lastName,
@@ -90,12 +99,114 @@ export default function RegisterPage() {
       year: parseInt(formData.year),
     })
 
-    if (success) {
-      router.push("/dashboard")
+    if (result.success) {
+      // No session is created — the account must be verified by email first.
+      // The account exists either way; `verificationEmailSent` only says
+      // whether the email actually went out.
+      setRegisteredEmail(formData.email)
+      setVerificationEmailSent(result.verificationEmailSent)
     } else {
-      setError("ไม่สามารถสมัครสมาชิกได้ กรุณาลองใหม่อีกครั้ง")
+      setError(result.message || "ไม่สามารถสมัครสมาชิกได้ กรุณาลองใหม่อีกครั้ง")
     }
     setIsLoading(false)
+  }
+
+  const handleResendVerification = async () => {
+    if (!registeredEmail) return
+    setIsResending(true)
+    setResendMessage("")
+    try {
+      await api("/auth/resend-verification", { method: "POST", body: { email: registeredEmail } })
+      setVerificationEmailSent(true)
+      setResendMessage("ส่งลิงก์ยืนยันอีเมลแล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ")
+    } catch (err) {
+      setResendMessage(
+        err instanceof Error ? err.message : "ไม่สามารถส่งอีเมลยืนยันได้ กรุณาลองใหม่ภายหลัง"
+      )
+    } finally {
+      setIsResending(false)
+    }
+  }
+
+  // Post-registration state: the account exists but is unverified, so there is
+  // nothing to navigate into yet.
+  if (registeredEmail) {
+    return (
+      <div className="relative min-h-screen overflow-hidden flex items-center justify-center bg-background p-4 py-10 sm:py-12">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(107,62,0,0.08),transparent_60%)]"
+        />
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6b3e00] shadow-md">
+                <MailCheck className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl sm:text-3xl tracking-tight">สมัครสมาชิกสำเร็จ</CardTitle>
+            <CardDescription className="text-sm sm:text-base">
+              {verificationEmailSent
+                ? "กรุณาตรวจสอบอีเมลของคุณและคลิกลิงก์ยืนยันก่อนเข้าสู่ระบบ"
+                : "บัญชีของคุณถูกสร้างแล้ว แต่ยังส่งอีเมลยืนยันไม่สำเร็จ"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {verificationEmailSent ? (
+              <div className="rounded-lg border border-dashed px-4 py-6 text-center">
+                <p className="text-sm text-muted-foreground mb-1">เราได้ส่งลิงก์ยืนยันไปที่</p>
+                <p className="font-medium text-foreground break-all">{registeredEmail}</p>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  ลิงก์มีอายุ 24 ชั่วโมง หากไม่พบอีเมล กรุณาตรวจสอบในกล่องจดหมายขยะ (Spam)
+                </p>
+              </div>
+            ) : (
+              /* Partial success: the account exists, only delivery failed —
+                 do NOT tell the user to register again, offer a resend. */
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-5">
+                <div className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">ส่งอีเมลยืนยันไม่สำเร็จ</p>
+                    <p className="mt-1">
+                      บัญชีสำหรับ <span className="font-medium break-all">{registeredEmail}</span>{" "}
+                      ถูกสร้างเรียบร้อยแล้ว ไม่ต้องสมัครใหม่อีกครั้ง
+                      กรุณากดปุ่มด้านล่างเพื่อส่งลิงก์ยืนยันอีกครั้ง
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!verificationEmailSent && (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full mt-4"
+                onClick={handleResendVerification}
+                disabled={isResending}
+              >
+                {isResending ? <Spinner className="mr-2" /> : null}
+                ส่งลิงก์ยืนยันอีกครั้ง
+              </Button>
+            )}
+
+            {resendMessage && (
+              <div className="mt-4 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                {resendMessage}
+              </div>
+            )}
+
+            <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+              ยืนยันอีเมลแล้ว?{" "}
+              <Link href="/login" className="text-primary font-medium hover:underline">
+                เข้าสู่ระบบ
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -207,7 +318,7 @@ export default function RegisterPage() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="ตั้งรหัสผ่าน 6 ตัวขึ้นไป"
+                    placeholder="เช่น ProjectClue@2026"
                     value={formData.password}
                     onChange={(e) => handleChange("password", e.target.value)}
                   />
@@ -223,6 +334,29 @@ export default function RegisterPage() {
                     onChange={(e) => handleChange("confirmPassword", e.target.value)}
                   />
                 </Field>
+              </div>
+
+              {/* Live checklist of the password policy (mirrors the backend). */}
+              <div className="rounded-lg border bg-muted/40 px-4 py-3">
+                <p className="text-sm font-medium text-foreground mb-2">รหัสผ่านต้องประกอบด้วย</p>
+                <ul className="space-y-1">
+                  {getPasswordRuleStates(formData.password).map((rule) => (
+                    <li
+                      key={rule.id}
+                      className={cn(
+                        "flex items-center gap-2 text-sm",
+                        rule.passed ? "text-primary" : "text-muted-foreground"
+                      )}
+                    >
+                      {rule.passed ? (
+                        <Check className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <X className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                      )}
+                      <span>{rule.label}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </FieldGroup>
 

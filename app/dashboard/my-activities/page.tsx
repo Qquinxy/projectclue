@@ -118,9 +118,53 @@ export default function MyActivitiesPage() {
     fetchMyActivities()
   }, [user])
 
-  const upcomingActivities = participations.filter(
-    p => p.status === "registered" && p.activity?.status === "upcoming"
-  )
+  // "กำลังจะมา" is decided by WHEN THE ACTIVITY HAPPENS, not by any status
+  // field. Two stored fields would otherwise get in the way:
+  //
+  //  - Activity.status is written once at creation and never recomputed
+  //    against the calendar, so a future activity can sit on any value.
+  //  - The participation status is not a timeline either: an admin can mark
+  //    a student "attended" days BEFORE the activity takes place, which is
+  //    exactly what hid genuinely upcoming registrations behind
+  //    "เข้าร่วมแล้ว" and left this tab showing 0.
+  //
+  // So: any participation the student still holds (registered, or already
+  // marked attended) counts as upcoming while the activity's day has not
+  // passed and neither the participation nor the activity was cancelled.
+  // Withdrawn ("cancelled") and no-show ("absent") records are excluded.
+  const ACTIVE_PARTICIPATION: ParticipationStatus[] = ["registered", "attended"]
+
+  // Dates are stored as UTC midnight (e.g. 2026-09-07T00:00:00.000Z) while the
+  // system is used in Thailand (UTC+7), so day boundaries are compared in ICT
+  // rather than in whatever timezone the browser happens to be in. Comparing
+  // "YYYY-MM-DD" strings keeps an activity visible for the whole of its own
+  // Thai calendar day — endTime cannot be used for this, because in the real
+  // data it is frequently earlier than startTime.
+  const ICT_OFFSET_MS = 7 * 60 * 60 * 1000
+  const ictDayKey = (value: string | Date) => {
+    const date = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(date.getTime())) return null
+    return new Date(date.getTime() + ICT_OFFSET_MS).toISOString().slice(0, 10)
+  }
+
+  const todayInThailand = ictDayKey(new Date())
+
+  const hasNotPassed = (dateValue: string) => {
+    const day = ictDayKey(dateValue)
+    return day !== null && todayInThailand !== null && day >= todayInThailand
+  }
+
+  const upcomingActivities = participations
+    .filter(
+      p =>
+        ACTIVE_PARTICIPATION.includes(p.status) &&
+        p.activity?.status !== "cancelled" &&
+        hasNotPassed(p.activity.date)
+    )
+    .sort((a, b) => new Date(a.activity.date).getTime() - new Date(b.activity.date).getTime())
+
+  // Unchanged: "เข้าร่วมแล้ว" stays a record of attendance, so past/completed
+  // behaviour and the volunteer-hour total below are untouched.
   const completedActivities = participations.filter(
     p => p.status === "attended"
   )

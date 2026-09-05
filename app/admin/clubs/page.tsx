@@ -153,7 +153,10 @@ function buildClubPayload(form: ClubFormState) {
 
 export default function AdminClubsPage() {
   const { user } = useAuth()
-  const isClubAdmin = user?.role === "club_admin"
+  // A club_admin with a confirmed Super Admin-equivalent appointment is
+  // treated as a superadmin here (full club list, create and delete), matching
+  // what the backend now allows them to do.
+  const isClubAdmin = user?.role === "club_admin" && user?.elevatedAdmin !== true
   const managedClubIds = new Set(user?.managedClubs ?? [])
 
   const [searchQuery, setSearchQuery] = useState("")

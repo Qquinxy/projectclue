@@ -36,7 +36,9 @@ interface VolunteerActivity {
 
 interface VolunteerParticipation {
   _id: string
-  activity: VolunteerActivity
+  // null when the referenced Activity was hard-deleted before that was
+  // blocked. The row itself — and the hours it earned — remain valid.
+  activity: VolunteerActivity | null
   status: string
   hoursEarned: number
   attendedAt: string | null
@@ -236,15 +238,24 @@ export default function VolunteerHoursPage() {
                   {volunteerRecords.map((record) => (
                     <TableRow key={record._id}>
                       <TableCell>
-                        <Link
-                          href={`/activities/${record.activity._id}`}
-                          className="font-medium text-foreground hover:text-primary transition-colors"
-                        >
-                          {record.activity.title}
-                        </Link>
+                        {record.activity ? (
+                          <Link
+                            href={`/activities/${record.activity._id}`}
+                            className="font-medium text-foreground hover:text-primary transition-colors"
+                          >
+                            {record.activity.title}
+                          </Link>
+                        ) : (
+                          // The activity was deleted; the earned hours in this
+                          // row are still valid, so the record is kept and
+                          // shown as a non-clickable placeholder.
+                          <span className="font-medium text-muted-foreground italic">
+                            กิจกรรมถูกลบแล้ว
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {record.activity.club.name}
+                        {record.activity?.club?.name ?? "-"}
                       </TableCell>
                       <TableCell className="numeric-font text-muted-foreground">
                         {record.attendedAt && new Date(record.attendedAt).toLocaleDateString("th-TH", {

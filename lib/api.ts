@@ -56,6 +56,58 @@ export async function apiUpload<T = unknown>(
   return data
 }
 
+// Binary download variant of `api` (CSV / XLSX export). The endpoint answers
+// with a file on success and with the usual JSON error envelope on failure —
+// including 403 when a club_admin asks for an activity outside their clubs,
+// and 404 when there is nothing to export — so failures are surfaced as a
+// thrown Error carrying the server's message instead of saving a junk file.
+export async function apiDownload(
+  endpoint: string,
+  fallbackFilename: string
+): Promise<void> {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: "GET",
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    let message = "ไม่สามารถดาวน์โหลดไฟล์ได้"
+    try {
+      const data = await response.json()
+      if (data?.message) message = data.message
+    } catch {
+      // Non-JSON error body — keep the generic message.
+    }
+    throw new Error(message)
+  }
+
+  // Prefer the server's filename (RFC 5987 UTF-8 form first, so Thai activity
+  // names survive), falling back to the caller's suggestion.
+  const disposition = response.headers.get("Content-Disposition") ?? ""
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const asciiMatch = disposition.match(/filename="([^"]+)"/i)
+  let filename = fallbackFilename
+  if (utf8Match?.[1]) {
+    try {
+      filename = decodeURIComponent(utf8Match[1])
+    } catch {
+      filename = asciiMatch?.[1] ?? fallbackFilename
+    }
+  } else if (asciiMatch?.[1]) {
+    filename = asciiMatch[1]
+  }
+
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 // Uploaded files are stored/served relative to the API's origin (e.g.
 // "/uploads/clubs/xxx.jpg"), not under the "/api" prefix — resolve against
 // that origin here. Values that are already absolute (legacy pasted URLs)
