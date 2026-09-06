@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useSignIn } from "@clerk/nextjs"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -10,11 +11,12 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
+import { GoogleIcon } from "@/components/google-icon"
 import { Users, AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuth()
+  const { login, loginWithGoogle, completeGoogleLogin } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -22,6 +24,40 @@ export default function LoginPage() {
   const [resendMessage, setResendMessage] = useState("")
   const [isResending, setIsResending] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+
+  const { signIn } = useSignIn()
+  const oauthHandledRef = useRef(false)
+
+  const enableGoogleLogin = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true"
+
+  // If Clerk's OAuth redirect just returned to this page, the sign-in object
+  // holds a completed Google session — exchange it for our backend JWT.
+  useEffect(() => {
+    const finishOAuth = async () => {
+      if (!signIn || oauthHandledRef.current) return
+
+      const isOAuthComplete =
+        signIn.status === "complete" && Boolean(signIn.createdSessionId)
+
+      if (!isOAuthComplete) return
+
+      oauthHandledRef.current = true
+      setIsGoogleLoading(true)
+      const { user: loggedInUser, error: googleError } = await completeGoogleLogin()
+
+      if (loggedInUser) {
+        const isAdmin =
+          loggedInUser.role === "club_admin" || loggedInUser.role === "superadmin"
+        router.push(isAdmin ? "/admin" : "/dashboard")
+      } else {
+        setError(googleError ?? "เข้าสู่ระบบด้วย Google ล้มเหลว กรุณาลองใหม่")
+      }
+      setIsGoogleLoading(false)
+    }
+
+    finishOAuth()
+  }, [signIn, completeGoogleLogin, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,6 +83,18 @@ export default function LoginPage() {
       )
     }
     setIsLoading(false)
+  }
+
+  const handleGoogleLogin = async () => {
+    setError("")
+    setIsGoogleLoading(true)
+    const { error: googleError } = await loginWithGoogle()
+    if (googleError) {
+      setError(googleError)
+      setIsGoogleLoading(false)
+    }
+    // On success the browser leaves for Google; isGoogleLoading stays true
+    // only while awaiting the redirect.
   }
 
   const handleResend = async () => {
@@ -81,6 +129,34 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {enableGoogleLogin && (
+            <div className="flex flex-col gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full gap-2"
+                disabled={isGoogleLoading || isLoading}
+                onClick={handleGoogleLogin}
+              >
+                {isGoogleLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <GoogleIcon className="h-5 w-5" />
+                )}
+                เข้าสู่ระบบด้วย Google
+              </Button>
+            </div>
+          )}
+
+          {enableGoogleLogin && (
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-sm text-muted-foreground">หรือ</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>

@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useSignIn } from "@clerk/nextjs"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -12,6 +14,7 @@ import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { getPasswordError, getPasswordRuleStates } from "@/lib/password"
+import { GoogleIcon } from "@/components/google-icon"
 import { Users, AlertCircle, MailCheck, Check, X } from "lucide-react"
 
 const faculties = [
@@ -26,8 +29,13 @@ const faculties = [
 const STUDENT_ID_PATTERN = /^[0-9]{11}-[0-9]$/
 
 export default function RegisterPage() {
-  const { register } = useAuth()
+  const router = useRouter()
+  const { register, loginWithGoogle, completeGoogleLogin } = useAuth()
+  const { signIn } = useSignIn()
+  const oauthHandledRef = useRef(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState("")
   // Set once registration succeeds; switches the card to the "check your
   // email" state instead of navigating into the app.
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
@@ -46,6 +54,49 @@ export default function RegisterPage() {
     year: "",
   })
   const [error, setError] = useState("")
+
+  const enableGoogleLogin = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true"
+
+  // If Clerk's OAuth redirect just returned to this page, complete the
+  // Google login by exchanging the Clerk session for our backend JWT.
+  useEffect(() => {
+    const finishOAuth = async () => {
+      if (!signIn || oauthHandledRef.current) return
+
+      const isOAuthComplete =
+        signIn.status === "complete" && Boolean(signIn.createdSessionId)
+
+      if (!isOAuthComplete) return
+
+      oauthHandledRef.current = true
+      setIsGoogleLoading(true)
+      const { user: loggedInUser, error: googleLoginError } = await completeGoogleLogin()
+
+      if (loggedInUser) {
+        const isAdmin =
+          loggedInUser.role === "club_admin" || loggedInUser.role === "superadmin"
+        router.push(isAdmin ? "/admin" : "/dashboard")
+      } else {
+        setGoogleError(googleLoginError ?? "สมัครสมาชิกด้วย Google ล้มเหลว กรุณาลองใหม่")
+      }
+      setIsGoogleLoading(false)
+    }
+
+    finishOAuth()
+  }, [signIn, completeGoogleLogin, router])
+
+  const handleGoogleSignUp = async () => {
+    setGoogleError("")
+    setError("")
+    setIsGoogleLoading(true)
+    const { error: googleLoginError } = await loginWithGoogle("/register")
+    if (googleLoginError) {
+      setGoogleError(googleLoginError)
+      setIsGoogleLoading(false)
+    }
+    // On success the browser leaves for Google; isGoogleLoading stays true
+    // only while awaiting the redirect.
+  }
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -228,6 +279,41 @@ export default function RegisterPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {enableGoogleLogin && (
+            <>
+              <div className="flex flex-col gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-2"
+                  disabled={isGoogleLoading || isLoading}
+                  onClick={handleGoogleSignUp}
+                >
+                  {isGoogleLoading ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <GoogleIcon className="h-5 w-5" />
+                  )}
+                  สมัครสมาชิกด้วย Google
+                </Button>
+
+                {googleError && (
+                  <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{googleError}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-sm text-muted-foreground">หรือ</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
+
           <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>
