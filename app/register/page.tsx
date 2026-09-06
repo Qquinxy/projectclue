@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useSignIn } from "@clerk/nextjs"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { googleAuthUrl, googleErrorMessage } from "@/lib/google"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,10 +28,7 @@ const faculties = [
 const STUDENT_ID_PATTERN = /^[0-9]{11}-[0-9]$/
 
 export default function RegisterPage() {
-  const router = useRouter()
-  const { register, loginWithGoogle, completeGoogleLogin } = useAuth()
-  const { signIn } = useSignIn()
-  const oauthHandledRef = useRef(false)
+  const { register } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [googleError, setGoogleError] = useState("")
@@ -57,45 +53,23 @@ export default function RegisterPage() {
 
   const enableGoogleLogin = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true"
 
-  // If Clerk's OAuth redirect just returned to this page, complete the
-  // Google login by exchanging the Clerk session for our backend JWT.
+  // The Google OAuth callback redirects here with ?error=... on failure.
+  // Read it once on mount and remove it from the URL so a refresh doesn't
+  // keep showing a stale error.
   useEffect(() => {
-    const finishOAuth = async () => {
-      if (!signIn || oauthHandledRef.current) return
-
-      const isOAuthComplete =
-        signIn.status === "complete" && Boolean(signIn.createdSessionId)
-
-      if (!isOAuthComplete) return
-
-      oauthHandledRef.current = true
-      setIsGoogleLoading(true)
-      const { user: loggedInUser, error: googleLoginError } = await completeGoogleLogin()
-
-      if (loggedInUser) {
-        const isAdmin =
-          loggedInUser.role === "club_admin" || loggedInUser.role === "superadmin"
-        router.push(isAdmin ? "/admin" : "/dashboard")
-      } else {
-        setGoogleError(googleLoginError ?? "สมัครสมาชิกด้วย Google ล้มเหลว กรุณาลองใหม่")
-      }
-      setIsGoogleLoading(false)
+    const params = new URLSearchParams(window.location.search)
+    const errCode = params.get("error")
+    if (errCode) {
+      setGoogleError(googleErrorMessage(errCode) ?? "สมัครสมาชิกด้วย Google ไม่สำเร็จ")
+      window.history.replaceState({}, "", window.location.pathname)
     }
+  }, [])
 
-    finishOAuth()
-  }, [signIn, completeGoogleLogin, router])
-
-  const handleGoogleSignUp = async () => {
+  const handleGoogleSignUp = () => {
     setGoogleError("")
     setError("")
     setIsGoogleLoading(true)
-    const { error: googleLoginError } = await loginWithGoogle("/register")
-    if (googleLoginError) {
-      setGoogleError(googleLoginError)
-      setIsGoogleLoading(false)
-    }
-    // On success the browser leaves for Google; isGoogleLoading stays true
-    // only while awaiting the redirect.
+    window.location.href = googleAuthUrl()
   }
 
   const handleChange = (field: string, value: string) => {

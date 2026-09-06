@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Kanit, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { ClerkProvider } from '@clerk/nextjs'
 import { AuthProvider } from '@/lib/auth-context'
 import './globals.css'
 
@@ -43,11 +42,9 @@ export default function RootLayout({
   return (
     <html lang="th">
       <body className={`${kanit.variable} font-sans antialiased`}>
-        <ClerkProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ClerkProvider>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Analytics />
       </body>
     </html>

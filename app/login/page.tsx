@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useSignIn } from "@clerk/nextjs"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { googleAuthUrl, googleErrorMessage } from "@/lib/google"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -16,7 +16,7 @@ import { Users, AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, loginWithGoogle, completeGoogleLogin } = useAuth()
+  const { login } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -26,38 +26,19 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
-  const { signIn } = useSignIn()
-  const oauthHandledRef = useRef(false)
-
   const enableGoogleLogin = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true"
 
-  // If Clerk's OAuth redirect just returned to this page, the sign-in object
-  // holds a completed Google session — exchange it for our backend JWT.
+  // The Google OAuth callback redirects here with ?error=... on failure.
+  // Read it once on mount and remove it from the URL so a refresh doesn't
+  // keep showing a stale error.
   useEffect(() => {
-    const finishOAuth = async () => {
-      if (!signIn || oauthHandledRef.current) return
-
-      const isOAuthComplete =
-        signIn.status === "complete" && Boolean(signIn.createdSessionId)
-
-      if (!isOAuthComplete) return
-
-      oauthHandledRef.current = true
-      setIsGoogleLoading(true)
-      const { user: loggedInUser, error: googleError } = await completeGoogleLogin()
-
-      if (loggedInUser) {
-        const isAdmin =
-          loggedInUser.role === "club_admin" || loggedInUser.role === "superadmin"
-        router.push(isAdmin ? "/admin" : "/dashboard")
-      } else {
-        setError(googleError ?? "เข้าสู่ระบบด้วย Google ล้มเหลว กรุณาลองใหม่")
-      }
-      setIsGoogleLoading(false)
+    const params = new URLSearchParams(window.location.search)
+    const errCode = params.get("error")
+    if (errCode) {
+      setError(googleErrorMessage(errCode) ?? "เข้าสู่ระบบด้วย Google ไม่สำเร็จ")
+      window.history.replaceState({}, "", window.location.pathname)
     }
-
-    finishOAuth()
-  }, [signIn, completeGoogleLogin, router])
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,16 +66,9 @@ export default function LoginPage() {
     setIsLoading(false)
   }
 
-  const handleGoogleLogin = async () => {
-    setError("")
+  const handleGoogleLogin = () => {
     setIsGoogleLoading(true)
-    const { error: googleError } = await loginWithGoogle()
-    if (googleError) {
-      setError(googleError)
-      setIsGoogleLoading(false)
-    }
-    // On success the browser leaves for Google; isGoogleLoading stays true
-    // only while awaiting the redirect.
+    window.location.href = googleAuthUrl()
   }
 
   const handleResend = async () => {
