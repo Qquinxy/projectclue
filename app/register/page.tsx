@@ -112,7 +112,9 @@ export default function RegisterPage() {
       "firstName",
       "lastName",
       "email",
+      "faculty",
       "major",
+      "year",
       "password",
       "confirmPassword",
     ]
@@ -123,6 +125,12 @@ export default function RegisterPage() {
 
     if (!STUDENT_ID_PATTERN.test(formData.studentId.trim())) {
       setError("รหัสนักศึกษาต้องเป็นตัวเลข 11 หลัก ตามด้วย - และตัวเลข 1 หลัก เช่น 67543206105-8")
+      return
+    }
+
+    const parsedYear = Number(formData.year)
+    if (!Number.isInteger(parsedYear) || parsedYear < 1) {
+      setError("กรุณาเลือกชั้นปีให้ถูกต้อง")
       return
     }
 
@@ -148,7 +156,7 @@ export default function RegisterPage() {
       password: formData.password,
       faculty: formData.faculty,
       major: formData.major,
-      year: parseInt(formData.year),
+      year: parsedYear,
     })
 
     if (result.success) {

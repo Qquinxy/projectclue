@@ -136,12 +136,18 @@ export default function ProfilePage() {
       return
     }
 
+    const parsedYear = Number(form.year)
+    if (!Number.isInteger(parsedYear) || parsedYear < 1) {
+      setFormError("กรุณาเลือกชั้นปีให้ถูกต้อง")
+      return
+    }
+
     setIsSaving(true)
     const { user: updated, error } = await updateProfile({
       phone: form.phone.trim(),
       faculty: form.faculty,
       major: form.major,
-      year: Number(form.year),
+      year: parsedYear,
     })
     if (updated) {
       setSaveMessage("บันทึกข้อมูลเรียบร้อยแล้ว")
