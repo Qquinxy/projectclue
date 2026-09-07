@@ -136,7 +136,8 @@ export default function ProfilePage() {
       return
     }
 
-    const parsedYear = Number(form.year)
+    const yearMatch = String(form.year).match(/\d+/)
+    const parsedYear = yearMatch ? parseInt(yearMatch[0], 10) : NaN
     if (!Number.isInteger(parsedYear) || parsedYear < 1) {
       setFormError("กรุณาเลือกชั้นปีให้ถูกต้อง")
       return

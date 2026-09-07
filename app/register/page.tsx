@@ -128,7 +128,8 @@ export default function RegisterPage() {
       return
     }
 
-    const parsedYear = Number(formData.year)
+    const yearMatch = String(formData.year).match(/\d+/)
+    const parsedYear = yearMatch ? parseInt(yearMatch[0], 10) : NaN
     if (!Number.isInteger(parsedYear) || parsedYear < 1) {
       setError("กรุณาเลือกชั้นปีให้ถูกต้อง")
       return
