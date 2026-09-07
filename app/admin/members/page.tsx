@@ -117,11 +117,17 @@ export default function AdminMembersPage() {
     }
   }, [selectedClubId, fetchMembers])
 
-  const filteredMembers = members.filter((member) =>
-    member.student.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    member.student.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  const filteredMembers = members.filter((member) => {
+  if (!member.student) return false
+
+  const query = searchQuery.toLowerCase()
+
+  return (
+    member.student.firstName.toLowerCase().includes(query) ||
+    member.student.lastName.toLowerCase().includes(query) ||
     member.student.studentId.includes(searchQuery)
   )
+})
 
   return (
     <div className="space-y-8 md:space-y-10">
