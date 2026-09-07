@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ActivityCard } from "@/components/activity-card"
 import { useAuth } from "@/lib/auth-context"
 import { api, resolveImageUrl } from "@/lib/api"
+import { isProfileComplete } from "@/lib/reference"
 import { CLUB_CATEGORIES, type Club, type Activity } from "@/lib/types"
 import {
   Users,
@@ -172,6 +173,11 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Backend joinClub rejects students whose profile is missing phone /
+  // faculty / major / year — mirror it here so the button offers a link to
+  // the profile page instead of a doomed join attempt.
+  const profileComplete = isProfileComplete(user)
+
   if (isLoading || isAuthLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -316,7 +322,15 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                   </Button>
                 )}
 
-                {user && !isMember && !isFull && (
+                {user && !isMember && !isFull && !profileComplete && (
+                  <Button asChild size="lg" className="text-base">
+                    <Link href="/dashboard/profile">
+                      ยืนยันข้อมูลส่วนตัว (เบอร์ ชั้นปี คณะ สาขา) ก่อนสมัคร
+                    </Link>
+                  </Button>
+                )}
+
+                {user && !isMember && !isFull && profileComplete && (
                   <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
                       <Button size="lg" className="text-base">

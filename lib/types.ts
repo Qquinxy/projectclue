@@ -87,6 +87,17 @@ export interface ClubMembership {
 
 export type ParticipationStatus = "registered" | "attended" | "absent" | "cancelled"
 
+// Selectable academic reference values (faculties / years / majors) the admin
+// manages under /admin/reference-data; the register form and profile editor
+// render them as Select options.
+export interface ReferenceDataItem {
+  id: string
+  type: "faculty" | "year" | "major"
+  value: string
+  label: string
+  sortOrder: number
+}
+
 export interface ActivityParticipation {
   id: string
   activity: {

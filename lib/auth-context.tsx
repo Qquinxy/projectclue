@@ -16,6 +16,7 @@ interface AuthContextType {
   isLoading: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   register: (data: RegisterData) => Promise<RegisterResult>
+  updateProfile: (data: ProfileUpdateData) => Promise<LoginResult>
   logout: () => Promise<void>
 }
 
@@ -48,6 +49,17 @@ interface RegisterData {
   faculty: string
   major: string
   year: number
+}
+
+// Editable profile fields — the subset of the user document PATCH /auth/me
+// accepts (firstName/lastName/phone/faculty/major/year are allowed).
+interface ProfileUpdateData {
+  firstName?: string
+  lastName?: string
+  phone?: string
+  faculty?: string
+  major?: string
+  year?: number
 }
 
 interface AuthResponse {
@@ -142,6 +154,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Update the editable profile fields (phone / faculty / major / year, plus
+  // the name fields). Keeps the context user in sync so the whole app
+  // reflects the new value immediately (e.g. the join-club profile gate).
+  const updateProfile = async (data: ProfileUpdateData): Promise<LoginResult> => {
+    try {
+      const response = await api<AuthResponse>("/auth/me", {
+        method: "PATCH",
+        body: data,
+      })
+
+      if (response.success && response.data?.user) {
+        setUser(response.data.user)
+        return { user: response.data.user, error: null }
+      }
+
+      return { user: null, error: response.message ?? null }
+    } catch (error) {
+      return {
+        user: null,
+        error: error instanceof Error ? error.message : null,
+      }
+    }
+  }
+
   // Logout
   const logout = async (): Promise<void> => {
     try {
@@ -162,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         register,
+        updateProfile,
         logout,
       }}
     >

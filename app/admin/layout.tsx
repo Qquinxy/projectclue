@@ -12,6 +12,7 @@ import {
   UserCheck,
   UserCog,
   Settings,
+  Database,
   ArrowLeft,
   Menu,
   Loader2
@@ -25,6 +26,7 @@ const sidebarItems = [
   { name: "จัดการกิจกรรม", href: "/admin/activities", icon: Calendar },
   { name: "จัดการสมาชิก", href: "/admin/members", icon: UserCheck },
   { name: "จัดการผู้ดูแลชมรม", href: "/admin/club-admins", icon: UserCog },
+  { name: "ข้อมูลอ้างอิง", href: "/admin/reference-data", icon: Database, superadminOnly: true },
   { name: "ตั้งค่าระบบ", href: "/admin/settings", icon: Settings, superadminOnly: true },
 ]
 
@@ -43,17 +45,18 @@ export default function AdminLayout({
   // the same admin surface as a superadmin. The backend enforces this
   // independently — this only keeps the UI consistent with it.
   const isSuperadmin = user?.role === "superadmin" || user?.elevatedAdmin === true
-  const isSettingsRoute = pathname === "/admin/settings"
+  const isSuperadminOnlyRoute =
+    pathname === "/admin/settings" || pathname === "/admin/reference-data"
 
   useEffect(() => {
     if (!isLoading && !isAuthorized) {
       router.replace("/dashboard")
-    } else if (!isLoading && isAuthorized && !isSuperadmin && isSettingsRoute) {
+    } else if (!isLoading && isAuthorized && !isSuperadmin && isSuperadminOnlyRoute) {
       router.replace("/admin")
     }
-  }, [isLoading, isAuthorized, isSuperadmin, isSettingsRoute, router])
+  }, [isLoading, isAuthorized, isSuperadmin, isSuperadminOnlyRoute, router])
 
-  if (isLoading || !isAuthorized || (!isSuperadmin && isSettingsRoute)) {
+  if (isLoading || !isAuthorized || (!isSuperadmin && isSuperadminOnlyRoute)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

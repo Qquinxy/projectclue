@@ -13,15 +13,20 @@ import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { getPasswordError, getPasswordRuleStates } from "@/lib/password"
+import { useReferenceLists } from "@/lib/reference"
 import { GoogleIcon } from "@/components/google-icon"
 import { Users, AlertCircle, MailCheck, Check, X } from "lucide-react"
 
-const faculties = [
+// Static fallbacks so the form still works if the reference-data API is
+// unreachable. The admin-managed lists from /api/reference-data take
+// precedence; when it returns data these constants are ignored.
+const FALLBACK_FACULTIES = [
   "คณะวิศวกรรมศาสตร์",
   "คณะบริหารธุรกิจ",
   "คณะศิลปศาสตร์",
   "คณะสถาปัตยกรรมศาสตร์",
 ]
+const FALLBACK_YEARS = [1, 2, 3, 4]
 
 // 11 digits, a dash, then 1 digit (e.g. 67543206105-8) — must match the
 // backend's registration-only studentId validation.
@@ -52,6 +57,28 @@ export default function RegisterPage() {
   const [error, setError] = useState("")
 
   const enableGoogleLogin = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true"
+  const { lists: referenceLists } = useReferenceLists()
+
+  const facultyOptions =
+    referenceLists.faculties.length > 0
+      ? referenceLists.faculties
+      : FALLBACK_FACULTIES.map((f, i) => ({
+          id: f,
+          type: "faculty" as const,
+          value: f,
+          label: f,
+          sortOrder: i,
+        }))
+  const yearOptions =
+    referenceLists.years.length > 0
+      ? referenceLists.years
+      : FALLBACK_YEARS.map((y) => ({
+          id: String(y),
+          type: "year" as const,
+          value: String(y),
+          label: `ปี ${y}`,
+          sortOrder: y,
+        }))
 
   // The Google OAuth callback redirects here with ?error=... on failure.
   // Read it once on mount and remove it from the URL so a refresh doesn't
@@ -340,8 +367,8 @@ export default function RegisterPage() {
                     <SelectValue placeholder="เลือกคณะ" />
                   </SelectTrigger>
                   <SelectContent>
-                    {faculties.map((f) => (
-                      <SelectItem key={f} value={f}>{f}</SelectItem>
+                    {facultyOptions.map((f) => (
+                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -350,12 +377,16 @@ export default function RegisterPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="major">สาขา</FieldLabel>
-                  <Input
-                    id="major"
-                    placeholder="สาขาวิชา"
-                    value={formData.major}
-                    onChange={(e) => handleChange("major", e.target.value)}
-                  />
+                  <Select value={formData.major} onValueChange={(v) => handleChange("major", v)}>
+                    <SelectTrigger id="major">
+                      <SelectValue placeholder={referenceLists.majors.length > 0 ? "เลือกสาขา" : "ไม่มีข้อมูลสาขา"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceLists.majors.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="year">ชั้นปี</FieldLabel>
@@ -364,8 +395,8 @@ export default function RegisterPage() {
                       <SelectValue placeholder="ชั้นปี" />
                     </SelectTrigger>
                     <SelectContent>
-                      {[1, 2, 3, 4].map((y) => (
-                        <SelectItem key={y} value={y.toString()}>ปี {y}</SelectItem>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
