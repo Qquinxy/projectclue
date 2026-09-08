@@ -10,10 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ActivityCard } from "@/components/activity-card"
+import { ClubGallery } from "@/components/club-gallery"
 import { useAuth } from "@/lib/auth-context"
 import { api, resolveImageUrl } from "@/lib/api"
 import { isProfileComplete } from "@/lib/reference"
-import { CLUB_CATEGORIES, type Club, type Activity } from "@/lib/types"
+import { CLUB_CATEGORIES, getClubGalleryImages, type Club, type Activity } from "@/lib/types"
 import {
   Users,
   MapPin,
@@ -26,7 +27,8 @@ import {
   Calendar,
   Award,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -209,6 +211,9 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
 
   const category = CLUB_CATEGORIES.find((c) => c.value === club.category)
   const isFull = club.memberCount >= club.maxMembers
+  // The club's own photos. Never falls back to club.image — a club with only
+  // a cover has no gallery, and the section below stays hidden.
+  const galleryImages = getClubGalleryImages(club)
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -447,6 +452,22 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                         <ActivityCard key={activity.id} activity={activity} />
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Club photo gallery (Club.galleryImages) — the club's own
+                    photos, shown below the activities section. Distinct from
+                    the cover image above and from any activity's images; the
+                    whole section is hidden when the club has no photos. */}
+                {galleryImages.length > 0 && (
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground mb-6 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                        <ImageIcon className="h-5 w-5 text-primary" />
+                      </div>
+                      รูปภาพชมรม
+                    </h2>
+                    <ClubGallery images={galleryImages} />
                   </div>
                 )}
               </div>

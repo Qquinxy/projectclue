@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,8 +31,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { api } from "@/lib/api"
-import { ACTIVITY_TYPES, type Activity, type ActivityStatus, type ActivityType, type Club } from "@/lib/types"
+import { api, apiUpload, resolveImageUrl } from "@/lib/api"
+import {
+  ACTIVITY_IMAGE_ACCEPT_ATTR,
+  ACTIVITY_IMAGE_ACCEPTED_TYPES,
+  ACTIVITY_IMAGE_MAX_BYTES,
+  ACTIVITY_TYPES,
+  getActivityImages,
+  type Activity,
+  type ActivityStatus,
+  type ActivityType,
+  type Club,
+} from "@/lib/types"
 import {
   Search,
   Plus,
@@ -43,7 +53,9 @@ import {
   Award,
   Users,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ImageUp,
+  X
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -86,6 +98,14 @@ function normalizeActivity(activity: RawActivity): Activity {
   }
 }
 
+interface ActivityResponse {
+  success: boolean
+  message?: string
+  data: {
+    activity: RawActivity
+  }
+}
+
 interface RawClub extends Omit<Club, "id"> {
   id?: string
   _id?: string
@@ -115,7 +135,6 @@ interface ActivityFormState {
   location: string
   volunteerHours: string
   status: ActivityStatus | ""
-  image: string
   requirements: string
 }
 
@@ -131,9 +150,12 @@ const emptyActivityForm: ActivityFormState = {
   location: "",
   volunteerHours: "",
   status: "",
-  image: "",
   requirements: "",
 }
+
+// Images per multipart request. Must not exceed the backend's per-request
+// cap (multer `files: 20`); larger selections are sent as several requests.
+const UPLOAD_BATCH_SIZE = 20
 
 function activityToFormState(activity: Activity): ActivityFormState {
   return {
@@ -148,14 +170,16 @@ function activityToFormState(activity: Activity): ActivityFormState {
     location: activity.location ?? "",
     volunteerHours: activity.volunteerHours ? String(activity.volunteerHours) : "",
     status: activity.status,
-    image: activity.image ?? "",
     requirements: (activity.requirements ?? []).join("\n"),
   }
 }
 
 // Builds the POST/PATCH body: required fields always included, optional
 // fields included only when the admin actually provided a value. Never
-// includes currentParticipants/createdBy — those are server-managed.
+// includes currentParticipants/createdBy — those are server-managed — and
+// never includes images: the gallery is managed through
+// POST/DELETE /activities/:id/images, which is also what stops a PATCH from
+// wiping the images of an activity that already has some.
 function buildActivityPayload(form: ActivityFormState) {
   const payload: Record<string, unknown> = {
     club: form.club,
@@ -171,7 +195,6 @@ function buildActivityPayload(form: ActivityFormState) {
   if (form.location.trim()) payload.location = form.location.trim()
   if (form.volunteerHours.trim()) payload.volunteerHours = Number(form.volunteerHours)
   if (form.status) payload.status = form.status
-  if (form.image.trim()) payload.image = form.image.trim()
 
   const requirements = form.requirements.split("\n").map((s) => s.trim()).filter(Boolean)
   if (requirements.length > 0) payload.requirements = requirements
@@ -197,6 +220,120 @@ export default function AdminActivitiesPage() {
   const [form, setForm] = useState<ActivityFormState>(emptyActivityForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  // --- gallery editing state ---
+  // `existingImages` are paths already stored on the activity; removing one
+  // moves it to `pendingRemovals`, which is only applied against the API on
+  // submit. `newImages` are files chosen in this dialog and not uploaded yet.
+  const [existingImages, setExistingImages] = useState<string[]>([])
+  const [pendingRemovals, setPendingRemovals] = useState<string[]>([])
+  const [newImages, setNewImages] = useState<{ file: File; previewUrl: string }[]>([])
+  const [imageError, setImageError] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  // Object URLs are revoked when a preview is dropped, when the dialog is
+  // reopened, and on unmount, so previews never leak. `newImages` is the only
+  // owner of these URLs.
+  const newImagesRef = useRef(newImages)
+  useEffect(() => {
+    newImagesRef.current = newImages
+  }, [newImages])
+  useEffect(
+    () => () => newImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl)),
+    []
+  )
+
+  const resetImageState = () => {
+    newImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+    setExistingImages([])
+    setPendingRemovals([])
+    setNewImages([])
+    setImageError(null)
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
+
+  // Mirrors the backend's multer rules (10MB PER FILE, JPEG/PNG/WEBP). Valid
+  // files are kept even when others in the same selection are rejected, and
+  // the rejected ones are named so the admin knows which to replace.
+  const handleImageSelect = (fileList: FileList | null) => {
+    setImageError(null)
+    if (!fileList || fileList.length === 0) return
+
+    const accepted: { file: File; previewUrl: string }[] = []
+    const wrongType: string[] = []
+    const tooLarge: string[] = []
+
+    for (const file of Array.from(fileList)) {
+      if (!ACTIVITY_IMAGE_ACCEPTED_TYPES.includes(file.type)) {
+        wrongType.push(file.name)
+      } else if (file.size > ACTIVITY_IMAGE_MAX_BYTES) {
+        tooLarge.push(file.name)
+      } else {
+        accepted.push({ file, previewUrl: URL.createObjectURL(file) })
+      }
+    }
+
+    const problems: string[] = []
+    if (wrongType.length > 0) {
+      problems.push(
+        `รองรับเฉพาะไฟล์ JPEG, PNG หรือ WEBP จึงไม่ได้เพิ่ม: ${wrongType.join(", ")}`
+      )
+    }
+    if (tooLarge.length > 0) {
+      problems.push(
+        `แต่ละรูปต้องมีขนาดไม่เกิน 10MB จึงไม่ได้เพิ่ม: ${tooLarge.join(", ")}`
+      )
+    }
+    setImageError(problems.length > 0 ? problems.join(" / ") : null)
+
+    if (accepted.length > 0) setNewImages((current) => [...current, ...accepted])
+    // Clear the input so re-picking the same file still fires onChange.
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
+
+  // Marked for deletion, applied on submit — so closing the dialog without
+  // saving leaves the activity's gallery untouched.
+  const markExistingImageForRemoval = (image: string) => {
+    setExistingImages((current) => current.filter((src) => src !== image))
+    setPendingRemovals((current) => (current.includes(image) ? current : [...current, image]))
+  }
+
+  const removeNewImage = (index: number) => {
+    setNewImages((current) => {
+      const target = current[index]
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      return current.filter((_, i) => i !== index)
+    })
+    setImageError(null)
+  }
+
+  // Applies the pending gallery edits to an activity that already exists.
+  // Deletions run first so the resulting order is "kept images, then new
+  // ones". Each successful step is dropped from the pending state, so a
+  // retry after a partial failure never repeats work already done.
+  const syncActivityImages = async (activityId: string) => {
+    for (const image of [...pendingRemovals]) {
+      await api(`/activities/${activityId}/images`, { method: "DELETE", body: { image } })
+      setPendingRemovals((current) => current.filter((src) => src !== image))
+    }
+
+    // The endpoint appends, so a selection larger than the backend's
+    // per-request cap is simply sent as several requests — there is no limit
+    // on how many images an activity ends up with.
+    for (let start = 0; start < newImages.length; start += UPLOAD_BATCH_SIZE) {
+      const batch = newImages.slice(start, start + UPLOAD_BATCH_SIZE)
+      const formData = new FormData()
+      // Field name "images" — matches upload.array('images') on the backend.
+      batch.forEach((image) => formData.append("images", image.file))
+      await apiUpload(`/activities/${activityId}/images`, formData)
+      batch.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+      // Drop the batch as it lands, so a failure part-way through does not
+      // re-upload what already succeeded when the admin retries.
+      setNewImages((current) => current.filter((image) => !batch.includes(image)))
+    }
+
+    if (newImages.length > 0 && imageInputRef.current) imageInputRef.current.value = ""
+  }
 
   const fetchActivities = useCallback(async () => {
     setIsLoading(true)
@@ -262,6 +399,7 @@ export default function AdminActivitiesPage() {
     setEditingActivityId(null)
     setForm(emptyActivityForm)
     setFormError(null)
+    resetImageState()
     setFormDialogOpen(true)
   }
 
@@ -270,6 +408,10 @@ export default function AdminActivitiesPage() {
     setEditingActivityId(activity.id)
     setForm(activityToFormState(activity))
     setFormError(null)
+    resetImageState()
+    // getActivityImages also covers an activity created before multi-image
+    // support, whose picture still lives in the legacy `image` field.
+    setExistingImages(getActivityImages(activity))
     setFormDialogOpen(true)
   }
 
@@ -278,15 +420,34 @@ export default function AdminActivitiesPage() {
     setFormError(null)
     try {
       const payload = buildActivityPayload(form)
+      let activityId = editingActivityId
+
       if (formMode === "create") {
-        await api("/activities", { method: "POST", body: payload })
+        const response = await api<ActivityResponse>("/activities", { method: "POST", body: payload })
+        const created = response.data?.activity ? normalizeActivity(response.data.activity) : null
+        activityId = created?.id ?? null
+        // The activity now exists. Switch the dialog to edit mode straight
+        // away so that if the image upload below fails, retrying updates this
+        // activity instead of creating a second one.
+        if (activityId) {
+          setFormMode("edit")
+          setEditingActivityId(activityId)
+          setExistingImages(created ? getActivityImages(created) : [])
+        }
       } else if (editingActivityId) {
         await api(`/activities/${editingActivityId}`, { method: "PATCH", body: payload })
       }
+
+      if (activityId) await syncActivityImages(activityId)
+
       setFormDialogOpen(false)
+      resetImageState()
       await fetchActivities()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกข้อมูลกิจกรรมได้")
+      // The activity itself may already be saved even when an image step
+      // failed, so keep the list in step with the server.
+      await fetchActivities()
     } finally {
       setIsSubmitting(false)
     }
@@ -613,12 +774,79 @@ export default function AdminActivitiesPage() {
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="activity-image">รูปภาพ (URL)</FieldLabel>
-              <Input
-                id="activity-image"
-                value={form.image}
-                onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-              />
+              <FieldLabel htmlFor="activity-images">รูปภาพ</FieldLabel>
+
+              {/* Images already stored on the activity. Removing one here only
+                  marks it; the DELETE call happens when the form is saved. */}
+              {existingImages.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {existingImages.map((image) => (
+                    <div key={image} className="relative h-20 w-20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={resolveImageUrl(image)}
+                        alt=""
+                        className="h-full w-full rounded-lg border border-border object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => markExistingImageForRemoval(image)}
+                        aria-label="ลบรูปนี้"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Files picked in this dialog, not uploaded yet. */}
+              {newImages.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {newImages.map((image, index) => (
+                    <div key={image.previewUrl} className="relative h-20 w-20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={image.previewUrl}
+                        alt=""
+                        className="h-full w-full rounded-lg border-2 border-dashed border-primary/50 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeNewImage(index)}
+                        aria-label="นำรูปนี้ออก"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-4">
+                {existingImages.length === 0 && newImages.length === 0 && (
+                  <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <ImageUp className="h-6 w-6 text-primary" />
+                  </div>
+                )}
+                <Input
+                  id="activity-images"
+                  ref={imageInputRef}
+                  type="file"
+                  multiple
+                  accept={ACTIVITY_IMAGE_ACCEPT_ATTR}
+                  onChange={(e) => handleImageSelect(e.target.files)}
+                  className="flex-1"
+                />
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                เลือกได้หลายรูป รองรับ JPEG, PNG และ WEBP ขนาดไม่เกิน 10MB ต่อรูป
+              </p>
+
+              {imageError && <p className="text-sm text-destructive">{imageError}</p>}
             </Field>
             <Field>
               <FieldLabel htmlFor="activity-requirements">สิ่งที่ต้องเตรียม (บรรทัดละ 1 ข้อ)</FieldLabel>

@@ -32,7 +32,15 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { api, apiUpload, resolveImageUrl } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
-import { CLUB_CATEGORIES, type Club, type ClubCategory } from "@/lib/types"
+import {
+  CLUB_CATEGORIES,
+  CLUB_GALLERY_ACCEPT_ATTR,
+  CLUB_GALLERY_ACCEPTED_TYPES,
+  CLUB_GALLERY_MAX_BYTES,
+  getClubGalleryImages,
+  type Club,
+  type ClubCategory,
+} from "@/lib/types"
 import {
   Search,
   Plus,
@@ -42,7 +50,8 @@ import {
   Eye,
   Loader2,
   AlertCircle,
-  ImageUp
+  ImageUp,
+  X
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -123,6 +132,11 @@ function clubToFormState(club: Club): ClubFormState {
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5MB, matches the backend's multer limit
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
+// Gallery photos per multipart request. Must not exceed the backend's
+// per-request cap (multer `files: 20`); larger selections are sent as several
+// requests, so a club's gallery has no practical size limit.
+const GALLERY_BATCH_SIZE = 20
 
 // Builds the POST/PATCH body: required fields always included, optional
 // fields included only when the admin actually provided a value. Never
@@ -210,6 +224,118 @@ export default function AdminClubsPage() {
     setImagePreviewUrl(URL.createObjectURL(file))
   }
 
+  // --- club photo GALLERY state (Club.galleryImages) ---
+  // Entirely separate from the cover-image state above: different field,
+  // different endpoint, different upload rules. `existingGallery` are photos
+  // already stored on the club; removing one moves it to `galleryRemovals`,
+  // which is only applied against the API on submit. `newGallery` are files
+  // chosen in this dialog and not uploaded yet.
+  const [existingGallery, setExistingGallery] = useState<string[]>([])
+  const [galleryRemovals, setGalleryRemovals] = useState<string[]>([])
+  const [newGallery, setNewGallery] = useState<{ file: File; previewUrl: string }[]>([])
+  const [galleryError, setGalleryError] = useState<string | null>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+
+  // Object URLs are revoked when a preview is dropped, when the dialog is
+  // reopened, and on unmount, so previews never leak.
+  const newGalleryRef = useRef(newGallery)
+  useEffect(() => {
+    newGalleryRef.current = newGallery
+  }, [newGallery])
+  useEffect(
+    () => () => newGalleryRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl)),
+    []
+  )
+
+  const resetGalleryState = () => {
+    newGalleryRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+    setExistingGallery([])
+    setGalleryRemovals([])
+    setNewGallery([])
+    setGalleryError(null)
+    if (galleryInputRef.current) galleryInputRef.current.value = ""
+  }
+
+  // Mirrors the backend's gallery multer rules (10MB PER FILE, JPEG/PNG/WEBP).
+  // Valid files are kept even when others in the same selection are rejected,
+  // and the rejected ones are named so the admin knows which to replace.
+  const handleGallerySelect = (fileList: FileList | null) => {
+    setGalleryError(null)
+    if (!fileList || fileList.length === 0) return
+
+    const accepted: { file: File; previewUrl: string }[] = []
+    const wrongType: string[] = []
+    const tooLarge: string[] = []
+
+    for (const file of Array.from(fileList)) {
+      if (!CLUB_GALLERY_ACCEPTED_TYPES.includes(file.type)) {
+        wrongType.push(file.name)
+      } else if (file.size > CLUB_GALLERY_MAX_BYTES) {
+        tooLarge.push(file.name)
+      } else {
+        accepted.push({ file, previewUrl: URL.createObjectURL(file) })
+      }
+    }
+
+    const problems: string[] = []
+    if (wrongType.length > 0) {
+      problems.push(
+        `รองรับเฉพาะไฟล์ JPEG, PNG หรือ WEBP จึงไม่ได้เพิ่ม: ${wrongType.join(", ")}`
+      )
+    }
+    if (tooLarge.length > 0) {
+      problems.push(
+        `แต่ละรูปต้องมีขนาดไม่เกิน 10MB จึงไม่ได้เพิ่ม: ${tooLarge.join(", ")}`
+      )
+    }
+    setGalleryError(problems.length > 0 ? problems.join(" / ") : null)
+
+    if (accepted.length > 0) setNewGallery((current) => [...current, ...accepted])
+    // Clear the input so re-picking the same file still fires onChange.
+    if (galleryInputRef.current) galleryInputRef.current.value = ""
+  }
+
+  // Marked for deletion, applied on submit — so closing the dialog without
+  // saving leaves the club's gallery untouched.
+  const markGalleryImageForRemoval = (image: string) => {
+    setExistingGallery((current) => current.filter((src) => src !== image))
+    setGalleryRemovals((current) => (current.includes(image) ? current : [...current, image]))
+  }
+
+  const removeNewGalleryImage = (index: number) => {
+    setNewGallery((current) => {
+      const target = current[index]
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      return current.filter((_, i) => i !== index)
+    })
+    setGalleryError(null)
+  }
+
+  // Applies the pending gallery edits to a club that already exists.
+  // Deletions run first so the resulting order is "kept photos, then new
+  // ones". Each successful step is dropped from the pending state, so a retry
+  // after a partial failure never repeats work already done.
+  const syncClubGallery = async (clubId: string) => {
+    for (const image of [...galleryRemovals]) {
+      await api(`/clubs/${clubId}/gallery-images`, { method: "DELETE", body: { image } })
+      setGalleryRemovals((current) => current.filter((src) => src !== image))
+    }
+
+    for (let start = 0; start < newGallery.length; start += GALLERY_BATCH_SIZE) {
+      const batch = newGallery.slice(start, start + GALLERY_BATCH_SIZE)
+      const formData = new FormData()
+      // Field name "images" — matches upload.array('images') on the backend.
+      batch.forEach((image) => formData.append("images", image.file))
+      await apiUpload(`/clubs/${clubId}/gallery-images`, formData)
+      batch.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+      // Drop the batch as it lands, so a failure part-way through does not
+      // re-upload what already succeeded when the admin retries.
+      setNewGallery((current) => current.filter((image) => !batch.includes(image)))
+    }
+
+    if (newGallery.length > 0 && galleryInputRef.current) galleryInputRef.current.value = ""
+  }
+
   const fetchClubs = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -269,6 +395,7 @@ export default function AdminClubsPage() {
     setForm(emptyClubForm)
     setFormError(null)
     resetImageState()
+    resetGalleryState()
     setFormDialogOpen(true)
   }
 
@@ -278,6 +405,8 @@ export default function AdminClubsPage() {
     setForm(clubToFormState(club))
     setFormError(null)
     resetImageState()
+    resetGalleryState()
+    setExistingGallery(getClubGalleryImages(club))
     setFormDialogOpen(true)
   }
 
@@ -290,21 +419,39 @@ export default function AdminClubsPage() {
 
       if (formMode === "create") {
         const response = await api<ClubResponse>("/clubs", { method: "POST", body: payload })
-        clubId = response.data?.club ? normalizeClub(response.data.club).id : null
+        const created = response.data?.club ? normalizeClub(response.data.club) : null
+        clubId = created?.id ?? null
+        // The club now exists. Switch the dialog to edit mode straight away so
+        // that if an image step below fails, retrying updates this club
+        // instead of creating a second one.
+        if (clubId) {
+          setFormMode("edit")
+          setEditingClubId(clubId)
+          setExistingGallery(created ? getClubGalleryImages(created) : [])
+        }
       } else if (editingClubId) {
         await api(`/clubs/${editingClubId}`, { method: "PATCH", body: payload })
       }
 
+      // The cover image — unchanged: still one file to POST /clubs/:id/image.
       if (imageFile && clubId) {
         const formData = new FormData()
         formData.append("image", imageFile)
         await apiUpload(`/clubs/${clubId}/image`, formData)
       }
 
+      // The club's photo gallery — a separate field and a separate endpoint.
+      if (clubId) await syncClubGallery(clubId)
+
       setFormDialogOpen(false)
+      resetImageState()
+      resetGalleryState()
       await fetchClubs()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกข้อมูลชมรมได้")
+      // The club itself may already be saved even when an image step failed,
+      // so keep the list in step with the server.
+      await fetchClubs()
     } finally {
       setIsSubmitting(false)
     }
@@ -538,7 +685,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-image">รูปภาพ</FieldLabel>
+              <FieldLabel htmlFor="club-image">รูปประจำชมรม</FieldLabel>
               <div className="flex items-center gap-4">
                 {imagePreviewUrl || form.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -564,6 +711,80 @@ export default function AdminClubsPage() {
               {imageError && (
                 <p className="text-sm text-destructive">{imageError}</p>
               )}
+              <p className="text-xs text-muted-foreground">
+                รูปเดียวที่ใช้เป็นหน้าปกชมรม
+              </p>
+            </Field>
+
+            {/* The club's PHOTO GALLERY — a different field (galleryImages),
+                a different endpoint and different limits from the cover
+                image above. */}
+            <Field>
+              <FieldLabel htmlFor="club-gallery">รูปภาพชมรม</FieldLabel>
+
+              {/* Photos already stored on the club. Removing one here only
+                  marks it; the DELETE call happens when the form is saved. */}
+              {existingGallery.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {existingGallery.map((image) => (
+                    <div key={image} className="relative h-20 w-20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={resolveImageUrl(image)}
+                        alt=""
+                        className="h-full w-full rounded-lg border border-border object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => markGalleryImageForRemoval(image)}
+                        aria-label="ลบรูปนี้"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Files picked in this dialog, not uploaded yet. */}
+              {newGallery.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {newGallery.map((image, index) => (
+                    <div key={image.previewUrl} className="relative h-20 w-20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={image.previewUrl}
+                        alt=""
+                        className="h-full w-full rounded-lg border-2 border-dashed border-primary/50 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeNewGalleryImage(index)}
+                        aria-label="นำรูปนี้ออก"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Input
+                id="club-gallery"
+                ref={galleryInputRef}
+                type="file"
+                multiple
+                accept={CLUB_GALLERY_ACCEPT_ATTR}
+                onChange={(e) => handleGallerySelect(e.target.files)}
+              />
+
+              <p className="text-xs text-muted-foreground">
+                รูปกิจกรรม การแข่งขัน หรือบรรยากาศของชมรม — เลือกได้หลายรูป รองรับ JPEG, PNG และ WEBP ขนาดไม่เกิน 10MB ต่อรูป
+              </p>
+
+              {galleryError && <p className="text-sm text-destructive">{galleryError}</p>}
             </Field>
             <Field>
               <FieldLabel htmlFor="club-advisor">อาจารย์ที่ปรึกษา</FieldLabel>

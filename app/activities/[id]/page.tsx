@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
-import { ACTIVITY_TYPES, type Activity } from "@/lib/types"
+import { ActivityGallery } from "@/components/activity-gallery"
+import { ACTIVITY_TYPES, getActivityImages, type Activity } from "@/lib/types"
 import {
   Calendar,
   Clock,
@@ -205,24 +206,25 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
             </Link>
 
             <div className="flex flex-col lg:flex-row gap-8">
-              {/* Activity Image */}
+              {/* Activity Images — one image, a browsable gallery, or the
+                  original placeholder when the activity has none. */}
               <div className="lg:w-1/3">
-                <div className="relative aspect-video lg:aspect-square rounded-xl overflow-hidden bg-gradient-to-br from-accent/20 to-primary/20">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Calendar className="h-24 w-24 text-accent/30" />
-                  </div>
-                  <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-                    <Badge className={cn("text-sm", statusColors[activity.status])}>
-                      {statusLabels[activity.status]}
-                    </Badge>
-                    {activity.volunteerHours > 0 && (
-                      <Badge variant="secondary" className="text-sm">
-                        <Award className="h-3 w-3 mr-1" />
-                        <span className="numeric-font">{activity.volunteerHours}</span>&nbsp;ชม.
+                <ActivityGallery
+                  images={getActivityImages(activity)}
+                  overlay={
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                      <Badge className={cn("text-sm", statusColors[activity.status])}>
+                        {statusLabels[activity.status]}
                       </Badge>
-                    )}
-                  </div>
-                </div>
+                      {activity.volunteerHours > 0 && (
+                        <Badge variant="secondary" className="text-sm">
+                          <Award className="h-3 w-3 mr-1" />
+                          <span className="numeric-font">{activity.volunteerHours}</span>&nbsp;ชม.
+                        </Badge>
+                      )}
+                    </div>
+                  }
+                />
               </div>
 
               {/* Activity Info */}

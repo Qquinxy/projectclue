@@ -3,7 +3,15 @@ export interface Club {
   name: string
   description: string
   category: ClubCategory
+  /** The single club cover/profile image. Unchanged. */
   image: string
+  /**
+   * The club's own photo gallery — competition photos, atmosphere shots,
+   * past events. A SEPARATE concept from `image`: the cover is never part of
+   * this list, and these photos are never used as the cover. Optional so
+   * clubs stored before this feature (no field at all) still type-check.
+   */
+  galleryImages?: string[]
   memberCount: number
   maxMembers: number
   advisorName: string
@@ -41,7 +49,18 @@ export interface Activity {
   volunteerHours: number
   type: ActivityType
   status: ActivityStatus
-  image: string
+  /**
+   * The activity gallery, in display order. `images[0]` is the cover.
+   * The API always sends this field — an activity created before multi-image
+   * support is reported as a one-element list built from its legacy `image`,
+   * so old data needs no special handling here.
+   */
+  images: string[]
+  /**
+   * @deprecated Legacy single-image field. The API still mirrors the cover
+   * into it for older consumers; read `images` (or `getActivityImages`).
+   */
+  image?: string
   requirements: string[]
 }
 
@@ -113,6 +132,27 @@ export interface ActivityParticipation {
   hoursEarned: number
 }
 
+// Upload rules for club GALLERY photos. These mirror the backend's multer
+// configuration for uploads/clubs-gallery exactly (10MB PER FILE,
+// JPEG/PNG/WEBP) — the backend is still the authority; validating here just
+// avoids a doomed round trip. The club COVER image keeps its own separate
+// rules and is uploaded through a different endpoint.
+export const CLUB_GALLERY_MAX_BYTES = 10 * 1024 * 1024
+export const CLUB_GALLERY_ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
+export const CLUB_GALLERY_ACCEPT_ATTR = CLUB_GALLERY_ACCEPTED_TYPES.join(",")
+
+// The club's gallery photos. Deliberately never falls back to `club.image`:
+// the cover is not a gallery photo, so a club with only a cover has an EMPTY
+// gallery and the gallery section stays hidden.
+export function getClubGalleryImages(
+  club: Pick<Club, "galleryImages"> | null | undefined
+): string[] {
+  if (!club) return []
+  return (club.galleryImages ?? []).filter(
+    (src) => typeof src === "string" && src.trim() !== ""
+  )
+}
+
 export const CLUB_CATEGORIES: { value: ClubCategory; label: string; color: string }[] = [
   { value: "volunteer", label: "จิตอาสา", color: "bg-emerald-500" },
   { value: "academic", label: "วิชาการ", color: "bg-blue-500" },
@@ -121,6 +161,27 @@ export const CLUB_CATEGORIES: { value: ClubCategory; label: string; color: strin
   { value: "technology", label: "เทคโนโลยี", color: "bg-cyan-500" },
   { value: "social", label: "สังคม", color: "bg-amber-500" },
 ]
+
+// Upload rules for activity gallery images. These mirror the backend's multer
+// configuration exactly (10MB PER FILE, JPEG/PNG/WEBP) — the backend is still
+// the authority; validating here just avoids a doomed round trip.
+export const ACTIVITY_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+export const ACTIVITY_IMAGE_ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
+export const ACTIVITY_IMAGE_ACCEPT_ATTR = ACTIVITY_IMAGE_ACCEPTED_TYPES.join(",")
+
+// The gallery of an activity, tolerating documents/responses that only carry
+// the legacy single `image`. Mirrors the backend's own normalization so a
+// stale cached response still renders correctly.
+export function getActivityImages(
+  activity: Pick<Activity, "images" | "image"> | null | undefined
+): string[] {
+  if (!activity) return []
+  const images = (activity.images ?? []).filter((src) => typeof src === "string" && src.trim() !== "")
+  if (images.length === 0 && activity.image && activity.image.trim() !== "") {
+    return [activity.image.trim()]
+  }
+  return images
+}
 
 export const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: "volunteer", label: "กิจกรรมจิตอาสา" },
