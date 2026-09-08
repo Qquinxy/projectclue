@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { api } from "@/lib/api"
 import { googleAuthUrl, googleErrorMessage } from "@/lib/google"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,9 +19,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const [needsVerification, setNeedsVerification] = useState(false)
-  const [resendMessage, setResendMessage] = useState("")
-  const [isResending, setIsResending] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
@@ -43,8 +39,6 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    setResendMessage("")
-    setNeedsVerification(false)
     setIsLoading(true)
 
     const { user: loggedInUser, error: loginError } = await login(email, password)
@@ -53,15 +47,9 @@ export default function LoginPage() {
       const isAdmin = loggedInUser.role === "club_admin" || loggedInUser.role === "superadmin"
       router.push(isAdmin ? "/admin" : "/dashboard")
     } else {
-      // The backend answers 403 with a "verify your email" message for an
-      // unverified account, and 401 for wrong credentials.
-      const isUnverified = Boolean(loginError && /verify your email/i.test(loginError))
-      setNeedsVerification(isUnverified)
-      setError(
-        isUnverified
-          ? "กรุณายืนยันอีเมลของคุณก่อนเข้าสู่ระบบ โปรดตรวจสอบกล่องจดหมายของคุณ"
-          : "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
-      )
+      // The only remaining login failure is bad credentials (401); the server
+      // message is kept for anything unexpected.
+      setError(loginError || "อีเมลหรือรหัสผ่านไม่ถูกต้อง")
     }
     setIsLoading(false)
   }
@@ -69,19 +57,6 @@ export default function LoginPage() {
   const handleGoogleLogin = () => {
     setIsGoogleLoading(true)
     window.location.href = googleAuthUrl()
-  }
-
-  const handleResend = async () => {
-    setIsResending(true)
-    setResendMessage("")
-    try {
-      await api("/auth/resend-verification", { method: "POST", body: { email } })
-      setResendMessage("ส่งลิงก์ยืนยันอีเมลใหม่แล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ")
-    } catch (err) {
-      setResendMessage(err instanceof Error ? err.message : "ไม่สามารถส่งอีเมลยืนยันได้")
-    } finally {
-      setIsResending(false)
-    }
   }
 
   return (
@@ -164,22 +139,6 @@ export default function LoginPage() {
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>{error}</span>
                   </div>
-                  {needsVerification && (
-                    <button
-                      type="button"
-                      onClick={handleResend}
-                      disabled={isResending || !email}
-                      className="mt-2 font-medium underline underline-offset-4 disabled:opacity-60"
-                    >
-                      {isResending ? "กำลังส่งอีเมล..." : "ส่งลิงก์ยืนยันอีเมลอีกครั้ง"}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {resendMessage && (
-                <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                  {resendMessage}
                 </div>
               )}
 

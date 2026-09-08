@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
-import { api } from "@/lib/api"
 import { googleAuthUrl, googleErrorMessage } from "@/lib/google"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -15,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { getPasswordError, getPasswordRuleStates } from "@/lib/password"
 import { useReferenceLists } from "@/lib/reference"
 import { GoogleIcon } from "@/components/google-icon"
-import { Users, AlertCircle, MailCheck, Check, X } from "lucide-react"
+import { Users, AlertCircle, CheckCircle2, Check, X } from "lucide-react"
 
 // Static fallbacks so the form still works if the reference-data API is
 // unreachable. The admin-managed lists from /api/reference-data take
@@ -37,12 +36,9 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [googleError, setGoogleError] = useState("")
-  // Set once registration succeeds; switches the card to the "check your
-  // email" state instead of navigating into the app.
+  // Set once registration succeeds; switches the card to the success state.
+  // Registration issues no session, so the user continues via the login page.
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
-  const [verificationEmailSent, setVerificationEmailSent] = useState(true)
-  const [isResending, setIsResending] = useState(false)
-  const [resendMessage, setResendMessage] = useState("")
   const [formData, setFormData] = useState({
     studentId: "",
     firstName: "",
@@ -161,36 +157,17 @@ export default function RegisterPage() {
     })
 
     if (result.success) {
-      // No session is created — the account must be verified by email first.
-      // The account exists either way; `verificationEmailSent` only says
-      // whether the email actually went out.
+      // The account is ready to use immediately. No session is issued here,
+      // so the success card sends the user to the login page.
       setRegisteredEmail(formData.email)
-      setVerificationEmailSent(result.verificationEmailSent)
     } else {
       setError(result.message || "ไม่สามารถสมัครสมาชิกได้ กรุณาลองใหม่อีกครั้ง")
     }
     setIsLoading(false)
   }
 
-  const handleResendVerification = async () => {
-    if (!registeredEmail) return
-    setIsResending(true)
-    setResendMessage("")
-    try {
-      await api("/auth/resend-verification", { method: "POST", body: { email: registeredEmail } })
-      setVerificationEmailSent(true)
-      setResendMessage("ส่งลิงก์ยืนยันอีเมลแล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ")
-    } catch (err) {
-      setResendMessage(
-        err instanceof Error ? err.message : "ไม่สามารถส่งอีเมลยืนยันได้ กรุณาลองใหม่ภายหลัง"
-      )
-    } finally {
-      setIsResending(false)
-    }
-  }
-
-  // Post-registration state: the account exists but is unverified, so there is
-  // nothing to navigate into yet.
+  // Post-registration state: the account is created and ready to use, but
+  // registration does not issue a session — the user logs in as a separate step.
   if (registeredEmail) {
     return (
       <div className="relative min-h-screen overflow-hidden flex items-center justify-center bg-background p-4 py-10 sm:py-12">
@@ -202,66 +179,28 @@ export default function RegisterPage() {
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6b3e00] shadow-md">
-                <MailCheck className="h-6 w-6 text-white" />
+                <CheckCircle2 className="h-6 w-6 text-white" />
               </div>
             </div>
             <CardTitle className="text-2xl sm:text-3xl tracking-tight">สมัครสมาชิกสำเร็จ</CardTitle>
             <CardDescription className="text-sm sm:text-base">
-              {verificationEmailSent
-                ? "กรุณาตรวจสอบอีเมลของคุณและคลิกลิงก์ยืนยันก่อนเข้าสู่ระบบ"
-                : "บัญชีของคุณถูกสร้างแล้ว แต่ยังส่งอีเมลยืนยันไม่สำเร็จ"}
+              บัญชีของคุณพร้อมใช้งานแล้ว เข้าสู่ระบบเพื่อเริ่มต้นใช้งานได้ทันที
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {verificationEmailSent ? (
-              <div className="rounded-lg border border-dashed px-4 py-6 text-center">
-                <p className="text-sm text-muted-foreground mb-1">เราได้ส่งลิงก์ยืนยันไปที่</p>
-                <p className="font-medium text-foreground break-all">{registeredEmail}</p>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  ลิงก์มีอายุ 24 ชั่วโมง หากไม่พบอีเมล กรุณาตรวจสอบในกล่องจดหมายขยะ (Spam)
-                </p>
-              </div>
-            ) : (
-              /* Partial success: the account exists, only delivery failed —
-                 do NOT tell the user to register again, offer a resend. */
-              <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-5">
-                <div className="flex items-start gap-2 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">ส่งอีเมลยืนยันไม่สำเร็จ</p>
-                    <p className="mt-1">
-                      บัญชีสำหรับ <span className="font-medium break-all">{registeredEmail}</span>{" "}
-                      ถูกสร้างเรียบร้อยแล้ว ไม่ต้องสมัครใหม่อีกครั้ง
-                      กรุณากดปุ่มด้านล่างเพื่อส่งลิงก์ยืนยันอีกครั้ง
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="rounded-lg border border-dashed px-4 py-6 text-center">
+              <p className="text-sm text-muted-foreground mb-1">สร้างบัญชีสำหรับ</p>
+              <p className="font-medium text-foreground break-all">{registeredEmail}</p>
+            </div>
 
-            {!verificationEmailSent && (
-              <Button
-                type="button"
-                size="lg"
-                className="w-full mt-4"
-                onClick={handleResendVerification}
-                disabled={isResending}
-              >
-                {isResending ? <Spinner className="mr-2" /> : null}
-                ส่งลิงก์ยืนยันอีกครั้ง
-              </Button>
-            )}
-
-            {resendMessage && (
-              <div className="mt-4 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                {resendMessage}
-              </div>
-            )}
+            <Button asChild size="lg" className="w-full mt-6">
+              <Link href="/login">เข้าสู่ระบบ</Link>
+            </Button>
 
             <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
-              ยืนยันอีเมลแล้ว?{" "}
-              <Link href="/login" className="text-primary font-medium hover:underline">
-                เข้าสู่ระบบ
+              กลับไปที่{" "}
+              <Link href="/" className="text-primary font-medium hover:underline">
+                หน้าแรก
               </Link>
             </div>
           </CardContent>

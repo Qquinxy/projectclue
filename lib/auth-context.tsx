@@ -20,24 +20,19 @@ interface AuthContextType {
   logout: () => Promise<void>
 }
 
-// Login can fail for two materially different reasons — wrong credentials
-// (401) versus an unverified email address (403) — so the caller gets the
-// server's message instead of a bare null.
+// Login failures carry the server's message rather than a bare null, so the
+// caller can surface exactly what went wrong.
 export interface LoginResult {
   user: Student | null
   error: string | null
 }
 
-// Registration no longer signs the user in: the account is created unverified
-// and the API returns the "check your email" message to display.
-//
-// `verificationEmailSent` is false in the partial-success case — the account
-// WAS created but the verification email could not be delivered, so the UI
-// tells the user that and offers a resend instead of implying failure.
+// Registration deliberately does not sign the user in — it stays a separate
+// step from login. The account is usable immediately, so the caller just
+// shows the success message and sends the user to the login page.
 export interface RegisterResult {
   success: boolean
   message: string | null
-  verificationEmailSent: boolean
 }
 
 interface RegisterData {
@@ -67,9 +62,6 @@ interface AuthResponse {
   message: string
   data: {
     user: Student
-    // Registration only: false means the account was created but the
-    // verification email could not be delivered.
-    verificationEmailSent?: boolean
   }
 }
 
@@ -119,8 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { user: null, error: response.message ?? null }
     } catch (error) {
-      // The API's message is the useful part here (bad credentials vs.
-      // "please verify your email"), so it is passed through to the page.
+      // The API's message is the useful part here, so it is passed through
+      // to the page.
       return {
         user: null,
         error: error instanceof Error ? error.message : null,
@@ -128,8 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Register — deliberately does NOT set the user: the account starts
-  // unverified and has no session until the emailed link is opened.
+  // Register — deliberately does NOT set the user. No session is issued by
+  // the register endpoint; the user logs in as a separate step.
   const register = async (
     data: RegisterData
   ): Promise<RegisterResult> => {
@@ -142,14 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
         success: Boolean(response.success),
         message: response.message ?? null,
-        // Absent on older responses — treat as sent so the happy path is unchanged.
-        verificationEmailSent: response.data?.verificationEmailSent !== false,
       }
     } catch (error) {
       return {
         success: false,
         message: error instanceof Error ? error.message : null,
-        verificationEmailSent: false,
       }
     }
   }

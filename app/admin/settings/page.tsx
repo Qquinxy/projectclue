@@ -9,7 +9,6 @@ import {
   Bell, 
   Shield, 
   Database,
-  Mail,
   Clock
 } from "lucide-react"
 
@@ -160,39 +159,6 @@ export default function AdminSettingsPage() {
               </div>
               <Switch defaultChecked />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Email Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Mail className="h-5 w-5 text-primary" />
-              ตั้งค่าอีเมล
-            </CardTitle>
-            <CardDescription>
-              การตั้งค่าสำหรับส่งอีเมลจากระบบ
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <FieldGroup>
-              <Field>
-                <FieldLabel>SMTP Server</FieldLabel>
-                <Input defaultValue="smtp.university.ac.th" />
-              </Field>
-            </FieldGroup>
-            <FieldGroup>
-              <Field>
-                <FieldLabel>SMTP Port</FieldLabel>
-                <Input type="number" defaultValue="587" />
-              </Field>
-            </FieldGroup>
-            <FieldGroup>
-              <Field>
-                <FieldLabel>อีเมลผู้ส่ง</FieldLabel>
-                <Input defaultValue="noreply@university.ac.th" type="email" />
-              </Field>
-            </FieldGroup>
           </CardContent>
         </Card>
 

@@ -40,7 +40,6 @@ import {
   Check,
   X,
   ShieldCheck,
-  ShieldAlert,
   ShieldOff
 } from "lucide-react"
 
@@ -78,9 +77,7 @@ interface RawClubAdmin {
   email: string
   phone?: string
   managedClubs?: string[]
-  emailVerified?: boolean
   elevatedAdmin?: boolean
-  elevatedAdminPending?: boolean
 }
 
 interface ClubAdmin {
@@ -91,11 +88,9 @@ interface ClubAdmin {
   email: string
   phone: string
   managedClubs: string[]
-  // Absent on accounts created before email verification existed.
-  emailVerified?: boolean
-  // Super Admin-equivalent appointment: active vs. awaiting email confirmation.
+  // Super Admin-equivalent appointment. Granting activates it immediately —
+  // there is no pending/awaiting-confirmation state.
   elevatedAdmin: boolean
-  elevatedAdminPending: boolean
 }
 
 interface UsersResponse {
@@ -117,9 +112,7 @@ function normalizeClubAdmin(user: RawClubAdmin): ClubAdmin {
     email: user.email,
     phone: user.phone ?? "",
     managedClubs: (user.managedClubs ?? []).map(String),
-    emailVerified: user.emailVerified,
     elevatedAdmin: user.elevatedAdmin === true,
-    elevatedAdminPending: user.elevatedAdminPending === true,
   }
 }
 
@@ -372,7 +365,7 @@ export default function AdminClubAdminsPage() {
   }
 
   // --- Super Admin-equivalent elevation (max 2, backend-enforced) ---
-  const elevatedCount = clubAdmins.filter((a) => a.elevatedAdmin || a.elevatedAdminPending).length
+  const elevatedCount = clubAdmins.filter((a) => a.elevatedAdmin).length
   const [elevatingId, setElevatingId] = useState<string | null>(null)
   const [elevationMessage, setElevationMessage] = useState<string | null>(null)
   const [elevationError, setElevationError] = useState<string | null>(null)
@@ -386,8 +379,7 @@ export default function AdminClubAdminsPage() {
         method: "POST",
       })
       setElevationMessage(
-        response.message ??
-          "ส่งอีเมลยืนยันการแต่งตั้งแล้ว สิทธิ์จะมีผลเมื่อผู้ดูแลชมรมยืนยันทางอีเมล"
+        response.message ?? "แต่งตั้งสิทธิ์เทียบเท่าผู้ดูแลระบบแล้ว สิทธิ์มีผลทันที"
       )
       await fetchData()
     } catch (err) {
@@ -575,22 +567,14 @@ export default function AdminClubAdminsPage() {
                               <ShieldCheck className="h-3 w-3" />
                               เทียบเท่าผู้ดูแลระบบ
                             </Badge>
-                          ) : admin.elevatedAdminPending ? (
-                            <Badge variant="outline" className="text-xs gap-1">
-                              <ShieldAlert className="h-3 w-3" />
-                              รอยืนยันทางอีเมล
-                            </Badge>
                           ) : (
                             <span className="text-muted-foreground text-sm">ผู้ดูแลชมรม</span>
-                          )}
-                          {admin.emailVerified === false && (
-                            <span className="text-xs text-destructive">ยังไม่ยืนยันอีเมล</span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
-                          {admin.elevatedAdmin || admin.elevatedAdminPending ? (
+                          {admin.elevatedAdmin ? (
                             <Button
                               variant="ghost"
                               size="icon"
