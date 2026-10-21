@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { ActivityEvidenceUploader } from "@/components/activity-evidence-uploader"
 import { ActivityGallery } from "@/components/activity-gallery"
 import { ACTIVITY_TYPES, getActivityImages, type Activity } from "@/lib/types"
 import {
@@ -69,7 +70,13 @@ interface ActivitiesMeResponse {
   success: boolean
   message?: string
   data: {
-    participations: { status: string; activity: { id?: string; _id?: string } }[]
+    participations: {
+      id?: string
+      _id?: string
+      status: string
+      evidence?: { contentType: string; uploadedAt: string }
+      activity: { id?: string; _id?: string }
+    }[]
   }
 }
 
@@ -79,6 +86,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
 
   const [activity, setActivity] = useState<Activity | null>(null)
   const [hasRegistered, setHasRegistered] = useState(false)
+  const [myParticipation, setMyParticipation] = useState<ActivitiesMeResponse["data"]["participations"][number] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notFoundError, setNotFoundError] = useState(false)
@@ -100,12 +108,17 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
       if (user) {
         const participationsRes = await api<ActivitiesMeResponse>("/students/me/activities")
         const participations = participationsRes.data?.participations ?? []
+        const myActivityParticipation = participations.find(
+          (p) => (p.activity?.id ?? p.activity?._id) === id
+        ) ?? null
+        setMyParticipation(myActivityParticipation)
         setHasRegistered(
           participations.some(
             (p) => (p.activity?.id ?? p.activity?._id) === id && p.status === "registered"
           )
         )
       } else {
+        setMyParticipation(null)
         setHasRegistered(false)
       }
     } catch (err) {
@@ -392,6 +405,15 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
         </section>
+
+      {user?.role === "student" && myParticipation && (myParticipation.id || myParticipation._id) && (
+        <section className="container mx-auto w-full px-4 -mt-5 pb-8">
+          <ActivityEvidenceUploader
+            participationId={myParticipation.id ?? myParticipation._id!}
+            initialEvidence={myParticipation.evidence}
+          />
+        </section>
+      )}
 
         {/* Details */}
         <section className="py-14 md:py-16">

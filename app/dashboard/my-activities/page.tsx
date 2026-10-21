@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { ActivityEvidenceUploader } from "@/components/activity-evidence-uploader"
 import { ActivityStatus, ParticipationStatus } from "@/lib/types"
 import {
   Calendar,
@@ -52,6 +53,7 @@ interface Participation {
   registeredAt: string
   attendedAt: string | null
   hoursEarned: number
+  evidence?: { contentType: string; uploadedAt: string }
   activity: ParticipationActivity
 }
 
@@ -359,6 +361,11 @@ function ActivityCard({ participation }: { participation: Participation }) {
                 </Link>
               </Button>
             </div>
+
+            <ActivityEvidenceUploader
+              participationId={participation.id}
+              initialEvidence={participation.evidence}
+            />
           </div>
         </div>
       </CardContent>

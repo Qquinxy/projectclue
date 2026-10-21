@@ -56,6 +56,28 @@ export async function apiUpload<T = unknown>(
   return data
 }
 
+// Authenticated binary response for private media such as participation
+// evidence. The blob is never exposed through the public /uploads route.
+export async function apiBlob(endpoint: string): Promise<Blob> {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: "GET",
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    let message = "ไม่สามารถโหลดไฟล์ได้ กรุณาลองอีกครั้ง"
+    try {
+      const data = await response.json()
+      if (data?.message) message = data.message
+    } catch {
+      // Keep the safe fallback for non-JSON error responses.
+    }
+    throw new Error(message)
+  }
+
+  return response.blob()
+}
+
 // Binary download variant of `api` (CSV / XLSX export). The endpoint answers
 // with a file on success and with the usual JSON error envelope on failure —
 // including 403 when a club_admin asks for an activity outside their clubs,
