@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,8 +14,79 @@ import {
   Database,
   Clock
 } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
+import { api } from "@/lib/api"
+
+interface VolunteerHoursSettings {
+  requiredVolunteerHours: number
+  enforceVolunteerHoursBeforeGraduation: boolean
+}
+
+interface SettingsResponse {
+  success: boolean
+  data: { settings: VolunteerHoursSettings }
+}
 
 export default function AdminSettingsPage() {
+  const [settings, setSettings] = useState<VolunteerHoursSettings | null>(null)
+  const [savedSettings, setSavedSettings] = useState<VolunteerHoursSettings | null>(null)
+  const [hoursInput, setHoursInput] = useState("")
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  const applySettings = (value: VolunteerHoursSettings) => {
+    setSettings(value)
+    setSavedSettings(value)
+    setHoursInput(String(value.requiredVolunteerHours))
+  }
+
+  useEffect(() => {
+    let active = true
+    api<SettingsResponse>("/admin/settings/volunteer-hours")
+      .then((response) => { if (active) applySettings(response.data.settings) })
+      .catch((error: unknown) => {
+        if (active) setLoadError(error instanceof Error ? error.message : "โหลดการตั้งค่าไม่สำเร็จ")
+      })
+      .finally(() => { if (active) setIsLoadingSettings(false) })
+    return () => { active = false }
+  }, [])
+
+  const saveSettings = async () => {
+    if (!settings || isSaving) return
+    const requiredVolunteerHours = Number(hoursInput)
+    if (!/^\d+$/.test(hoursInput.trim()) || !Number.isSafeInteger(requiredVolunteerHours) || requiredVolunteerHours < 0 || requiredVolunteerHours > 10000) {
+      setSaveError("กรุณาระบุชั่วโมงเป็นจำนวนเต็มตั้งแต่ 0 ถึง 10000")
+      setSaveSuccess(false)
+      return
+    }
+    setIsSaving(true)
+    setSaveError(null)
+    setSaveSuccess(false)
+    try {
+      const response = await api<SettingsResponse>("/admin/settings/volunteer-hours", {
+        method: "PUT",
+        body: { ...settings, requiredVolunteerHours },
+      })
+      applySettings(response.data.settings)
+      setSaveSuccess(true)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "บันทึกการตั้งค่าไม่สำเร็จ")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const resetSettings = () => {
+    if (!savedSettings || isSaving) return
+    setSettings(savedSettings)
+    setHoursInput(String(savedSettings.requiredVolunteerHours))
+    setSaveError(null)
+    setSaveSuccess(false)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -68,8 +142,19 @@ export default function AdminSettingsPage() {
           <CardContent className="space-y-6">
             <FieldGroup>
               <Field>
-                <FieldLabel>จำนวนชั่วโมงที่ต้องการ (ต่อปี)</FieldLabel>
-                <Input type="number" defaultValue="36" />
+                <FieldLabel>เกณฑ์ชั่วโมงจิตอาสาสะสมตลอดหลักสูตร</FieldLabel>
+                <Input
+                  id="required-volunteer-hours"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={1}
+                  value={hoursInput}
+                  disabled={isLoadingSettings || !!loadError || isSaving}
+                  onChange={(event) => { setHoursInput(event.target.value); setSaveSuccess(false); setSaveError(null) }}
+                  aria-describedby="volunteer-hours-settings-status"
+                />
+                <p className="text-xs text-muted-foreground">ยอดสะสมตลอดหลักสูตร (0–10000 ชั่วโมง)</p>
               </Field>
             </FieldGroup>
             <div className="flex items-center justify-between">
@@ -79,7 +164,25 @@ export default function AdminSettingsPage() {
                   นักศึกษาต้องมีชั่วโมงจิตอาสาครบตามกำหนดก่อนสำเร็จการศึกษา
                 </p>
               </div>
-              <Switch defaultChecked />
+              <Switch
+                checked={settings?.enforceVolunteerHoursBeforeGraduation ?? false}
+                disabled={isLoadingSettings || !!loadError || isSaving}
+                onCheckedChange={(checked) => {
+                  if (settings) {
+                    setSettings({ ...settings, enforceVolunteerHoursBeforeGraduation: checked })
+                    setSaveSuccess(false)
+                    setSaveError(null)
+                  }
+                }}
+                aria-label="กำหนดนโยบายชั่วโมงก่อนอนุมัติจบการศึกษา"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">ค่านี้เป็นนโยบายสำหรับขั้นตอนอนุมัติจบการศึกษาในอนาคต ปัจจุบันระบบยังไม่มีขั้นตอนดังกล่าวและยังไม่มีการบังคับใช้</p>
+            <div id="volunteer-hours-settings-status" aria-live="polite" className="min-h-5 text-sm">
+              {isLoadingSettings && <span className="inline-flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลดการตั้งค่า…</span>}
+              {loadError && <span className="inline-flex items-center gap-2 text-destructive"><AlertCircle className="h-4 w-4" />โหลดการตั้งค่าไม่สำเร็จ: {loadError}</span>}
+              {saveError && <span className="inline-flex items-center gap-2 text-destructive"><AlertCircle className="h-4 w-4" />{saveError}</span>}
+              {saveSuccess && <span className="inline-flex items-center gap-2 text-primary"><CheckCircle2 className="h-4 w-4" />บันทึกการตั้งค่าสำเร็จ</span>}
             </div>
           </CardContent>
         </Card>
@@ -206,8 +309,11 @@ export default function AdminSettingsPage() {
 
         {/* Save Button */}
         <div className="flex justify-end gap-4">
-          <Button variant="outline">ยกเลิก</Button>
-          <Button>บันทึกการตั้งค่า</Button>
+          <Button variant="outline" onClick={resetSettings} disabled={!settings || isSaving}>ยกเลิก</Button>
+          <Button onClick={() => void saveSettings()} disabled={!settings || isLoadingSettings || !!loadError || isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSaving ? "กำลังบันทึก…" : "บันทึกการตั้งค่า"}
+          </Button>
         </div>
       </div>
     </div>

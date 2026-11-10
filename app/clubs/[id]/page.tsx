@@ -9,10 +9,21 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ActivityCard } from "@/components/activity-card"
 import { ClubGallery } from "@/components/club-gallery"
 import { useAuth } from "@/lib/auth-context"
 import { api, resolveImageUrl } from "@/lib/api"
+import { notifyOnce } from "@/lib/notifications"
 import { isProfileComplete } from "@/lib/reference"
 import { CLUB_CATEGORIES, getClubGalleryImages, type Club, type Activity } from "@/lib/types"
 import {
@@ -97,6 +108,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
   const [isJoining, setIsJoining] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const fetchClub = useCallback(async () => {
@@ -149,27 +161,35 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const handleJoin = async () => {
+    if (isJoining) return
     setIsJoining(true)
     setActionError(null)
     try {
       await api(`/clubs/${id}/join`, { method: "POST" })
+      notifyOnce(`club-join-${id}`, "สมัครเข้าร่วมชมรมแล้ว")
       setDialogOpen(false)
       await fetchClub()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "ไม่สามารถสมัครเข้าร่วมชมรมได้")
+      notifyOnce(`club-join-error-${id}`, "สมัครเข้าชมรมไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาลองอีกครั้ง", "destructive")
     } finally {
       setIsJoining(false)
     }
   }
 
   const handleLeave = async () => {
+    if (isLeaving) return
+    if (isLeaving) return
     setIsLeaving(true)
     setActionError(null)
     try {
       await api(`/clubs/${id}/leave`, { method: "DELETE" })
+      notifyOnce(`club-leave-${id}`, "ออกจากชมรมแล้ว")
+      setLeaveDialogOpen(false)
       await fetchClub()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "ไม่สามารถออกจากชมรมได้")
+      notifyOnce(`club-leave-error-${id}`, "ออกจากชมรมไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาลองอีกครั้ง", "destructive")
     } finally {
       setIsLeaving(false)
     }
@@ -378,7 +398,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
                 )}
 
                 {user && isMember && (
-                  <Button size="lg" variant="destructive" onClick={handleLeave} disabled={isLeaving}>
+                  <Button size="lg" variant="destructive" onClick={() => setLeaveDialogOpen(true)} disabled={isLeaving}>
                     <CheckCircle className="h-5 w-5 mr-2" />
                     {isLeaving ? "กำลังออกจากชมรม..." : "ออกจากชมรม"}
                   </Button>
@@ -542,6 +562,21 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </section>
       </main>
+
+      <AlertDialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการออกจากชมรม</AlertDialogTitle>
+            <AlertDialogDescription>คุณต้องการออกจากชมรม {club.name} ใช่หรือไม่?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLeaving}>กลับ</AlertDialogCancel>
+            <AlertDialogAction disabled={isLeaving} onClick={(event) => { event.preventDefault(); void handleLeave() }}>
+              {isLeaving ? "กำลังดำเนินการ..." : "ยืนยันออกจากชมรม"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Footer />
     </div>

@@ -14,8 +14,26 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { api, apiDownload } from "@/lib/api"
+import { api, apiBlob, apiDownload } from "@/lib/api"
 import type { Activity, ParticipationStatus } from "@/lib/types"
+import { notifyOnce } from "@/lib/notifications"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   ArrowLeft,
   Award,
@@ -25,7 +43,8 @@ import {
   Loader2,
   AlertCircle,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -35,6 +54,8 @@ interface Participant {
   registeredAt: string
   attendedAt: string | null
   hoursEarned: number
+  evidence?: { contentType: string; uploadedAt: string }
+  evidenceAvailable: boolean
   student: {
     id: string
     studentId: string
@@ -86,6 +107,7 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
   const [error, setError] = useState<string | null>(null)
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [attendanceConfirmation, setAttendanceConfirmation] = useState<{ id: string; action: "attend" | "absent" } | null>(null)
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx" | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
 
@@ -112,16 +134,20 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
   }, [fetchData])
 
   const markAttendance = async (participationId: string, action: "attend" | "absent") => {
+    if (pendingId) return
     setPendingId(participationId)
     setActionErrors((prev) => ({ ...prev, [participationId]: "" }))
     try {
       await api(`/admin/participations/${participationId}/${action}`, { method: "PATCH" })
+      notifyOnce(`attendance-${participationId}`, action === "attend" ? "บันทึกการเข้าร่วมแล้ว" : "บันทึกสถานะขาดกิจกรรมแล้ว")
+      setAttendanceConfirmation(null)
       await fetchData()
     } catch (err) {
       setActionErrors((prev) => ({
         ...prev,
         [participationId]: err instanceof Error ? err.message : "ไม่สามารถบันทึกการเข้าร่วมได้"
       }))
+      notifyOnce(`attendance-error-${participationId}`, "บันทึกสถานะไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาลองอีกครั้ง", "destructive")
     } finally {
       setPendingId(null)
     }
@@ -199,11 +225,15 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Award className="h-5 w-5 text-primary" />
             รายชื่อผู้ลงทะเบียน (<span className="numeric-font">{participants.length}</span>)
           </CardTitle>
+          <Button type="button" variant="outline" size="sm" onClick={() => void fetchData()} disabled={isLoading || !!pendingId}>
+            <RefreshCw className={cn("mr-1 h-4 w-4", isLoading && "animate-spin")} />
+            รีเฟรชสถานะหลักฐาน
+          </Button>
         </CardHeader>
         <CardContent>
           {error ? (
@@ -276,12 +306,18 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
+                            {participant.status === "registered" && (
+                              <p className={cn("mr-auto text-xs", participant.evidenceAvailable ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground")}>
+                                {participant.evidenceAvailable ? "มีรูปหลักฐานแล้ว" : "ยังไม่มีรูปหลักฐาน · ให้นักศึกษาอัปโหลดที่กิจกรรมของฉัน"}
+                              </p>
+                            )}
                             {participant.status === "registered" ? (
                               <>
                                 <Button
                                   size="sm"
-                                  onClick={() => markAttendance(participant.id, "attend")}
-                                  disabled={isPending}
+                                  onClick={() => setAttendanceConfirmation({ id: participant.id, action: "attend" })}
+                                  disabled={isPending || !participant.evidenceAvailable}
+                                  title={!participant.evidenceAvailable ? "ต้องอัปโหลดรูปหลักฐานก่อนจึงจะอนุมัติการเข้าร่วมกิจกรรมได้" : undefined}
                                 >
                                   <CheckCircle className="mr-1 h-4 w-4" />
                                   เข้าร่วม
@@ -289,7 +325,7 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => markAttendance(participant.id, "absent")}
+                                  onClick={() => setAttendanceConfirmation({ id: participant.id, action: "absent" })}
                                   disabled={isPending}
                                 >
                                   <XCircle className="mr-1 h-4 w-4" />
@@ -298,6 +334,9 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
                               </>
                             ) : (
                               <span className="text-sm text-muted-foreground">บันทึกแล้ว</span>
+                            )}
+                            {participant.evidenceAvailable && (
+                              <EvidenceButton participationId={participant.id} activityTitle={activity?.title ?? "กิจกรรม"} />
                             )}
                           </div>
                         </TableCell>
@@ -310,6 +349,77 @@ export default function AdminActivityParticipantsPage({ params }: { params: Prom
           )}
         </CardContent>
       </Card>
+      <AlertDialog open={!!attendanceConfirmation} onOpenChange={(open) => { if (!open && !pendingId) setAttendanceConfirmation(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{attendanceConfirmation?.action === "attend" ? "ยืนยันการบันทึกว่าเข้าร่วม" : "ยืนยันการบันทึกว่าขาดกิจกรรม"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {attendanceConfirmation?.action === "attend"
+                ? "การยืนยันนี้จะบันทึกการเข้าร่วมและให้ระบบเดิมคำนวณชั่วโมงจิตอาสาตามกิจกรรม"
+                : "การยืนยันนี้จะบันทึกสถานะขาดกิจกรรมตามระบบเดิม"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!pendingId}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!attendanceConfirmation || !!pendingId}
+              onClick={(event) => {
+                event.preventDefault()
+                if (attendanceConfirmation) void markAttendance(attendanceConfirmation.id, attendanceConfirmation.action)
+              }}
+            >
+              {pendingId ? "กำลังบันทึก..." : "ยืนยัน"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  )
+}
+
+function EvidenceButton({ participationId, activityTitle }: { participationId: string; activityTitle: string }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
+
+  const openEvidence = async () => {
+    setIsLoading(true)
+    try {
+      const blob = await apiBlob(`/admin/participations/${participationId}/evidence`)
+      setPreviewUrl(URL.createObjectURL(blob))
+    } catch (error) {
+      notifyOnce(
+        `admin-evidence-${participationId}`,
+        "โหลดรูปหลักฐานไม่สำเร็จ",
+        error instanceof Error ? error.message : "กรุณาลองอีกครั้ง",
+        "destructive"
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="outline" disabled={isLoading} onClick={openEvidence}>
+        {isLoading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+        ดูหลักฐาน
+      </Button>
+      <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) setPreviewUrl(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>หลักฐานการเข้าร่วม</DialogTitle>
+            <DialogDescription>{activityTitle}</DialogDescription>
+          </DialogHeader>
+          {previewUrl && <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewUrl} alt={`หลักฐานการเข้าร่วม ${activityTitle}`} className="max-h-[70vh] w-full rounded-md object-contain" />
+          </>}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

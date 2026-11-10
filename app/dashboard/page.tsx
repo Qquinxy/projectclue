@@ -97,6 +97,8 @@ interface VolunteerHoursResponse {
   message?: string
   data: {
     totalVolunteerHours: number
+    requiredVolunteerHours: number
+    volunteerHoursRequirementMet: boolean
     activitiesCompleted: number
     history: unknown[]
   }
@@ -133,6 +135,7 @@ export default function DashboardPage() {
   const [participations, setParticipations] = useState<ActivityParticipationItem[]>([])
   const [upcomingActivities, setUpcomingActivities] = useState<Activity[]>([])
   const [totalVolunteerHours, setTotalVolunteerHours] = useState(0)
+  const [requiredVolunteerHours, setRequiredVolunteerHours] = useState<number | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -155,6 +158,7 @@ export default function DashboardPage() {
         setMemberships((clubsRes.data?.memberships ?? []).map(normalizeMembership))
         setParticipations((participationsRes.data?.participations ?? []).map(normalizeParticipation))
         setTotalVolunteerHours(volunteerRes.data?.totalVolunteerHours ?? 0)
+        setRequiredVolunteerHours(volunteerRes.data?.requiredVolunteerHours ?? null)
 
         // status is set once at creation and never recomputed against the
         // current date, so still filter/sort by date here rather than
@@ -413,17 +417,17 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 max-w-md">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">ความคืบหน้า (เป้าหมาย <span className="numeric-font">36</span> ชม.)</span>
-                    <span className="numeric-font font-medium">{Math.min(100, Math.round((totalVolunteerHours / 36) * 100))}%</span>
+                    <span className="text-muted-foreground">ความคืบหน้า (เป้าหมาย <span className="numeric-font">{requiredVolunteerHours ?? "—"}</span> ชม.)</span>
+                    <span className="numeric-font font-medium">{requiredVolunteerHours === null ? "—" : requiredVolunteerHours === 0 ? 100 : Math.min(100, Math.round((totalVolunteerHours / requiredVolunteerHours) * 100))}%</span>
                   </div>
                   <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (totalVolunteerHours / 36) * 100)}%` }}
+                      style={{ width: `${requiredVolunteerHours === null ? 0 : requiredVolunteerHours === 0 ? 100 : Math.min(100, (totalVolunteerHours / requiredVolunteerHours) * 100)}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    ต้องการอีก <span className="numeric-font">{Math.max(0, 36 - totalVolunteerHours)}</span> ชั่วโมง เพื่อครบตามเกณฑ์
+                    {requiredVolunteerHours === null ? "กำลังโหลดเกณฑ์ชั่วโมง…" : <>ต้องการอีก <span className="numeric-font">{Math.max(0, requiredVolunteerHours - totalVolunteerHours)}</span> ชั่วโมง เพื่อครบตามเกณฑ์</>}
                   </p>
                 </div>
               </div>

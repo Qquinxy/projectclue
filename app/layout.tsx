@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Kanit, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
+import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
 const kanit = Kanit({
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className={`${kanit.variable} font-sans antialiased`}>
         <AuthProvider>
           {children}
+          <Toaster />
         </AuthProvider>
         <Analytics />
       </body>

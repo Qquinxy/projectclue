@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { ActivityStatus, ParticipationStatus, formatActivityTime } from "@/lib/types"
 import { ActivityEvidenceUploader } from "@/components/activity-evidence-uploader"
-import { ActivityStatus, ParticipationStatus } from "@/lib/types"
 import {
   Calendar,
   MapPin,
@@ -33,6 +33,7 @@ const participationStatusConfig = {
 interface ActivityClub {
   id: string
   name: string
+  isDeleted?: boolean
 }
 
 interface ParticipationActivity {
@@ -44,6 +45,7 @@ interface ParticipationActivity {
   location: string
   volunteerHours: number
   status: ActivityStatus
+  isDeleted?: boolean
   club: ActivityClub
 }
 
@@ -160,6 +162,8 @@ export default function MyActivitiesPage() {
     .filter(
       p =>
         ACTIVE_PARTICIPATION.includes(p.status) &&
+        !p.activity?.isDeleted &&
+        !p.activity?.club?.isDeleted &&
         p.activity?.status !== "cancelled" &&
         hasNotPassed(p.activity.date)
     )
@@ -284,6 +288,8 @@ export default function MyActivitiesPage() {
 
 function ActivityCard({ participation }: { participation: Participation }) {
   const { activity } = participation
+  const canOpenActivity = !activity.isDeleted && !activity.club?.isDeleted
+
   if (!activity) return null
 
   const statusConfig = participationStatusConfig[participation.status]
@@ -301,12 +307,13 @@ function ActivityCard({ participation }: { participation: Participation }) {
           {/* Activity Info */}
           <div className="flex-1 p-4">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <Link
-                href={`/clubs/${activity.club?.id}`}
-                className="text-sm text-primary hover:underline"
-              >
-                {activity.club?.name}
-              </Link>
+              {canOpenActivity ? (
+                <Link href={`/clubs/${activity.club?.id}`} className="text-sm text-primary hover:underline">
+                  {activity.club?.name}
+                </Link>
+              ) : (
+                <span className="text-sm text-muted-foreground">{activity.club?.name}</span>
+              )}
               <Badge className={cn("text-xs", statusConfig.color, "bg-transparent")}>
                 <StatusIcon className="h-3 w-3 mr-1" />
                 {statusConfig.label}
@@ -314,9 +321,9 @@ function ActivityCard({ participation }: { participation: Participation }) {
             </div>
 
             <h3 className="font-semibold text-lg text-foreground mb-2">
-              <Link href={`/activities/${activity.id}`} className="hover:text-primary transition-colors">
-                {activity.title}
-              </Link>
+              {canOpenActivity ? (
+                <Link href={`/activities/${activity.id}`} className="hover:text-primary transition-colors">{activity.title}</Link>
+              ) : activity.title}
             </h3>
 
             <div className="grid sm:grid-cols-2 gap-2 text-sm text-muted-foreground mb-3">
@@ -333,7 +340,7 @@ function ActivityCard({ participation }: { participation: Participation }) {
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary/70" />
                 <span>
-                  <span className="numeric-font">{activity.startTime} - {activity.endTime}</span> น.
+                  <span className="numeric-font">{formatActivityTime(activity.startTime)} - {formatActivityTime(activity.endTime)}</span>
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -354,18 +361,17 @@ function ActivityCard({ participation }: { participation: Participation }) {
               <span className="text-xs text-muted-foreground">
                 ลงทะเบียนเมื่อ <span className="numeric-font">{new Date(participation.registeredAt).toLocaleDateString("th-TH")}</span>
               </span>
-              <Button asChild variant="ghost" size="sm">
-                <Link href={`/activities/${activity.id}`}>
-                  ดูรายละเอียด
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </Button>
+              {canOpenActivity && (
+                <Button asChild variant="ghost" size="sm">
+                  <Link href={`/activities/${activity.id}`}>
+                    ดูรายละเอียด
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
             </div>
 
-            <ActivityEvidenceUploader
-              participationId={participation.id}
-              initialEvidence={participation.evidence}
-            />
+            <ActivityEvidenceUploader participationId={participation.id} initialEvidence={participation.evidence} />
           </div>
         </div>
       </CardContent>

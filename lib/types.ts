@@ -22,6 +22,8 @@ export interface Club {
   requirements: string[]
   benefits: string[]
   createdAt: string
+  isDeleted?: boolean
+  deletedAt?: string | null
 }
 
 export type ClubCategory = 
@@ -41,6 +43,8 @@ export interface Activity {
   title: string
   description: string
   date: string
+  /** Optional in API responses for activities created before endDate existed. */
+  endDate?: string
   startTime: string
   endTime: string
   location: string
@@ -49,6 +53,8 @@ export interface Activity {
   volunteerHours: number
   type: ActivityType
   status: ActivityStatus
+  isDeleted?: boolean
+  deletedAt?: string | null
   /**
    * The activity gallery, in display order. `images[0]` is the cover.
    * The API always sends this field — an activity created before multi-image
@@ -66,6 +72,11 @@ export interface Activity {
 
 export type ActivityType = "volunteer" | "workshop" | "meeting" | "event" | "training"
 export type ActivityStatus = "upcoming" | "ongoing" | "completed" | "cancelled"
+
+/** Format stored wall-clock HH:mm values without applying browser timezone conversion. */
+export function formatActivityTime(value: string): string {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? `${value} น.` : value
+}
 
 export interface Student {
   id: string
@@ -181,6 +192,20 @@ export function getActivityImages(
     return [activity.image.trim()]
   }
   return images
+}
+
+/** Format an API date without letting the browser timezone change its calendar day. */
+export function formatActivityDate(value: string, locale = "th-TH"): string {
+  const datePart = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : value.slice(0, 10)
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart)
+  if (!match) return value
+  const [, year, month, day] = match
+  return new Date(Number(year), Number(month) - 1, Number(day), 12).toLocaleDateString(locale, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
 }
 
 export const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [

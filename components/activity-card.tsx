@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Clock, Award } from "lucide-react"
-import type { Activity } from "@/lib/types"
+import { formatActivityTime, type Activity } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface ActivityCardProps {
@@ -66,7 +66,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             </span>
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              <span className="numeric-font">{activity.startTime}</span>
+              <span className="numeric-font">{formatActivityTime(activity.startTime)}</span>
             </span>
             <span className={cn(isFull && "text-destructive")}>
               {isFull ? "เต็ม" : (

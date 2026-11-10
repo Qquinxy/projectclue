@@ -9,11 +9,22 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { notifyOnce } from "@/lib/notifications"
 import { ActivityEvidenceUploader } from "@/components/activity-evidence-uploader"
 import { ActivityGallery } from "@/components/activity-gallery"
-import { ACTIVITY_TYPES, getActivityImages, type Activity } from "@/lib/types"
+import { ACTIVITY_TYPES, formatActivityDate, formatActivityTime, getActivityImages, type Activity } from "@/lib/types"
 import {
   Calendar,
   Clock,
@@ -94,6 +105,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
   const [isRegistering, setIsRegistering] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const fetchActivity = useCallback(async () => {
@@ -105,18 +117,14 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
       const activityRes = await api<ActivityResponse>(`/activities/${id}`)
       setActivity(activityRes.data?.activity ? normalizeActivity(activityRes.data.activity) : null)
 
-      if (user) {
+      if (user?.role === "student") {
         const participationsRes = await api<ActivitiesMeResponse>("/students/me/activities")
         const participations = participationsRes.data?.participations ?? []
         const myActivityParticipation = participations.find(
           (p) => (p.activity?.id ?? p.activity?._id) === id
         ) ?? null
         setMyParticipation(myActivityParticipation)
-        setHasRegistered(
-          participations.some(
-            (p) => (p.activity?.id ?? p.activity?._id) === id && p.status === "registered"
-          )
-        )
+        setHasRegistered(myActivityParticipation?.status === "registered")
       } else {
         setMyParticipation(null)
         setHasRegistered(false)
@@ -142,27 +150,35 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
   }
 
   const handleRegister = async () => {
+    if (isRegistering) return
     setIsRegistering(true)
     setActionError(null)
     try {
       await api(`/activities/${id}/register`, { method: "POST" })
+      notifyOnce(`activity-register-${id}`, "สมัครเข้าร่วมกิจกรรมแล้ว")
       setDialogOpen(false)
       await fetchActivity()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "ไม่สามารถลงทะเบียนได้")
+      notifyOnce(`activity-register-error-${id}`, "สมัครเข้าร่วมไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาลองอีกครั้ง", "destructive")
     } finally {
       setIsRegistering(false)
     }
   }
 
   const handleCancel = async () => {
+    if (isCancelling) return
+    if (isCancelling) return
     setIsCancelling(true)
     setActionError(null)
     try {
       await api(`/activities/${id}/register`, { method: "DELETE" })
+      notifyOnce(`activity-cancel-${id}`, "ยกเลิกการสมัครแล้ว")
+      setCancelDialogOpen(false)
       await fetchActivity()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "ไม่สามารถยกเลิกการลงทะเบียนได้")
+      notifyOnce(`activity-cancel-error-${id}`, "ยกเลิกการสมัครไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาลองอีกครั้ง", "destructive")
     } finally {
       setIsCancelling(false)
     }
@@ -200,7 +216,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
   const activityType = ACTIVITY_TYPES.find((t) => t.value === activity.type)
   const spotsLeft = activity.maxParticipants - activity.currentParticipants
   const isFull = spotsLeft <= 0
-  const canRegister = !!user && activity.status === "upcoming" && !isFull && !hasRegistered
+  const canRegister = user?.role === "student" && activity.status === "upcoming" && !isFull && !hasRegistered
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -270,12 +286,10 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     <div>
                       <div className="text-sm text-muted-foreground">วันที่</div>
                       <div className="numeric-font font-semibold">
-                        {new Date(activity.date).toLocaleDateString("th-TH", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric"
-                        })}
+                        {formatActivityDate(activity.date)}
+                        {activity.endDate && activity.endDate.slice(0, 10) !== activity.date.slice(0, 10) && (
+                          <> – {formatActivityDate(activity.endDate)}</>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -286,7 +300,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     <div>
                       <div className="text-sm text-muted-foreground">เวลา</div>
                       <div className="font-semibold">
-                        <span className="numeric-font">{activity.startTime} - {activity.endTime}</span> น.
+                        <span className="numeric-font">{formatActivityTime(activity.startTime)} - {formatActivityTime(activity.endTime)}</span>
                       </div>
                     </div>
                   </div>
@@ -383,7 +397,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                 )}
 
                 {hasRegistered && (
-                  <Button size="lg" variant="secondary" onClick={handleCancel} disabled={isCancelling}>
+                  <Button size="lg" variant="secondary" onClick={() => setCancelDialogOpen(true)} disabled={isCancelling}>
                     <CheckCircle className="h-5 w-5 mr-2" />
                     {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกการลงทะเบียน"}
                   </Button>
@@ -527,6 +541,21 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </section>
       </main>
+
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการยกเลิกสมัครกิจกรรม</AlertDialogTitle>
+            <AlertDialogDescription>ต้องการยกเลิกการสมัครเข้าร่วม {activity.title} ใช่หรือไม่?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancelling}>กลับ</AlertDialogCancel>
+            <AlertDialogAction disabled={isCancelling} onClick={(event) => { event.preventDefault(); void handleCancel() }}>
+              {isCancelling ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Footer />
     </div>

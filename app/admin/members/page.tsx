@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -46,7 +47,8 @@ interface ClubMember {
   id: string
   joinedAt: string
   student: {
-    id: string
+    id?: string
+    _id?: string
     studentId: string
     firstName: string
     lastName: string
@@ -209,9 +211,9 @@ export default function AdminMembersPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-medium text-foreground">
+                            <Link href={`/admin/members/${member.student.id ?? member.student._id}`} className="font-medium text-primary hover:underline">
                               {member.student.firstName} {member.student.lastName}
-                            </div>
+                            </Link>
                             <div className="numeric-font text-sm text-muted-foreground">
                               {member.student.studentId}
                             </div>

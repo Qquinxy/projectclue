@@ -16,6 +16,16 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, LogOut, LayoutDashboard, Calendar, Users, Settings } from "lucide-react"
 import { useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const navigation = [
   { name: "หน้าแรก", href: "/" },
@@ -28,11 +38,21 @@ export function Navbar() {
   const router = useRouter()
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const isAdmin = user?.role === "superadmin" || user?.role === "club_admin"
 
-  const handleLogout = () => {
-    logout()
-    router.push("/")
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+    try {
+      await logout()
+      setLogoutDialogOpen(false)
+      setOpen(false)
+      router.push("/")
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
   return (
@@ -118,7 +138,7 @@ export function Navbar() {
                     </>
                   )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive gap-2">
+                  <DropdownMenuItem onClick={() => setLogoutDialogOpen(true)} className="text-destructive gap-2">
                     <LogOut className="h-4 w-4" />
                     ออกจากระบบ
                   </DropdownMenuItem>
@@ -209,7 +229,7 @@ export function Navbar() {
                     )}
                     <button
                       onClick={() => {
-                        handleLogout()
+                        setLogoutDialogOpen(true)
                         setOpen(false)
                       }}
                       className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-secondary text-left"
@@ -233,6 +253,20 @@ export function Navbar() {
           </Sheet>
         </div>
       </div>
+      <AlertDialog open={logoutDialogOpen} onOpenChange={(nextOpen) => { if (!isLoggingOut) setLogoutDialogOpen(nextOpen) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการออกจากระบบ</AlertDialogTitle>
+            <AlertDialogDescription>คุณต้องการออกจากระบบใช่หรือไม่?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoggingOut}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction disabled={isLoggingOut} onClick={(event) => { event.preventDefault(); void handleLogout() }}>
+              {isLoggingOut ? "กำลังออกจากระบบ..." : "ออกจากระบบ"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   )
 }

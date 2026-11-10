@@ -29,8 +29,10 @@ import {
 interface VolunteerActivity {
   _id: string
   title: string
+  isDeleted?: boolean
   club: {
     name: string
+    isDeleted?: boolean
   }
 }
 
@@ -46,6 +48,9 @@ interface VolunteerParticipation {
 
 interface VolunteerHoursData {
   totalVolunteerHours: number
+  requiredVolunteerHours: number
+  enforceVolunteerHoursBeforeGraduation: boolean
+  volunteerHoursRequirementMet: boolean
   activitiesCompleted: number
   history: VolunteerParticipation[]
 }
@@ -84,8 +89,8 @@ export default function VolunteerHoursPage() {
 
   const totalHours = data?.totalVolunteerHours ?? 0
   const volunteerRecords = data?.history ?? []
-  const requiredHours = 36
-  const progressPercent = Math.min(100, Math.round((totalHours / requiredHours) * 100))
+  const requiredHours = data?.requiredVolunteerHours ?? 0
+  const progressPercent = requiredHours === 0 ? 100 : Math.min(100, Math.round((totalHours / requiredHours) * 100))
   const remainingHours = Math.max(0, requiredHours - totalHours)
 
   if (isAuthLoading || isLoading) {
@@ -238,13 +243,15 @@ export default function VolunteerHoursPage() {
                   {volunteerRecords.map((record) => (
                     <TableRow key={record._id}>
                       <TableCell>
-                        {record.activity ? (
+                        {record.activity && !record.activity.isDeleted && !record.activity.club?.isDeleted ? (
                           <Link
                             href={`/activities/${record.activity._id}`}
                             className="font-medium text-foreground hover:text-primary transition-colors"
                           >
                             {record.activity.title}
                           </Link>
+                        ) : record.activity ? (
+                          <span className="font-medium text-muted-foreground">{record.activity.title}</span>
                         ) : (
                           // The activity was deleted; the earned hours in this
                           // row are still valid, so the record is kept and

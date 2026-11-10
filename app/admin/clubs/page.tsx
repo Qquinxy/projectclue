@@ -32,6 +32,7 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { api, apiUpload, resolveImageUrl } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
+import { notifyOnce } from "@/lib/notifications"
 import {
   CLUB_CATEGORIES,
   CLUB_GALLERY_ACCEPT_ATTR,
@@ -188,6 +189,7 @@ export default function AdminClubsPage() {
   const [form, setForm] = useState<ClubFormState>(emptyClubForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [showValidationErrors, setShowValidationErrors] = useState(false)
 
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -365,16 +367,18 @@ export default function AdminClubsPage() {
   }
 
   const confirmDelete = async () => {
-    if (!selectedClub) return
+    if (!selectedClub || isDeleting) return
     setIsDeleting(true)
     setDeleteError(null)
     try {
       await api(`/clubs/${selectedClub}`, { method: "DELETE" })
+      notifyOnce(`club-delete-${selectedClub}`, "ลบชมรมเรียบร้อยแล้ว")
       setDeleteDialogOpen(false)
       setSelectedClub(null)
       await fetchClubs()
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "ไม่สามารถลบชมรมได้")
+      notifyOnce(`club-delete-error-${selectedClub}`, "ลบชมรมไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาลองอีกครั้ง", "destructive")
     } finally {
       setIsDeleting(false)
     }
@@ -394,6 +398,7 @@ export default function AdminClubsPage() {
     setEditingClubId(null)
     setForm(emptyClubForm)
     setFormError(null)
+    setShowValidationErrors(false)
     resetImageState()
     resetGalleryState()
     setFormDialogOpen(true)
@@ -404,6 +409,7 @@ export default function AdminClubsPage() {
     setEditingClubId(club.id)
     setForm(clubToFormState(club))
     setFormError(null)
+    setShowValidationErrors(false)
     resetImageState()
     resetGalleryState()
     setExistingGallery(getClubGalleryImages(club))
@@ -411,6 +417,13 @@ export default function AdminClubsPage() {
   }
 
   const handleSubmit = async () => {
+    if (isSubmitting) return
+    if (!isFormValid) {
+      setShowValidationErrors(true)
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus())
+      return
+    }
+    const isCreating = formMode === "create"
     setIsSubmitting(true)
     setFormError(null)
     try {
@@ -443,12 +456,14 @@ export default function AdminClubsPage() {
       // The club's photo gallery — a separate field and a separate endpoint.
       if (clubId) await syncClubGallery(clubId)
 
+      notifyOnce(`club-save-${clubId ?? "new"}`, isCreating ? "สร้างชมรมเรียบร้อยแล้ว" : "บันทึกการแก้ไขชมรมแล้ว")
       setFormDialogOpen(false)
       resetImageState()
       resetGalleryState()
       await fetchClubs()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกข้อมูลชมรมได้")
+      notifyOnce(`club-save-error-${editingClubId ?? "new"}`, "บันทึกชมรมไม่สำเร็จ", err instanceof Error ? err.message : "กรุณาตรวจสอบข้อมูลแล้วลองอีกครั้ง", "destructive")
       // The club itself may already be saved even when an image step failed,
       // so keep the list in step with the server.
       await fetchClubs()
@@ -638,31 +653,40 @@ export default function AdminClubsPage() {
             </DialogDescription>
           </DialogHeader>
 
+          <p className="text-xs text-muted-foreground">* จำเป็นต้องกรอก · ช่องที่ระบุว่าไม่บังคับสามารถเว้นว่างได้</p>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="club-name">ชื่อชมรม</FieldLabel>
+              <FieldLabel htmlFor="club-name">ชื่อชมรม <span className="text-destructive" aria-hidden="true">*</span></FieldLabel>
               <Input
                 id="club-name"
+                required
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                aria-invalid={showValidationErrors && !form.name.trim()}
+                aria-describedby="club-name-error"
               />
+              {showValidationErrors && !form.name.trim() && <p id="club-name-error" className="text-sm text-destructive" role="alert">กรุณากรอกชื่อชมรม</p>}
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-description">รายละเอียด</FieldLabel>
+              <FieldLabel htmlFor="club-description">รายละเอียด <span className="text-destructive" aria-hidden="true">*</span></FieldLabel>
               <Textarea
                 id="club-description"
+                required
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                aria-invalid={showValidationErrors && !form.description.trim()}
+                aria-describedby="club-description-error"
                 rows={3}
               />
+              {showValidationErrors && !form.description.trim() && <p id="club-description-error" className="text-sm text-destructive" role="alert">กรุณากรอกรายละเอียดชมรม</p>}
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-category">หมวดหมู่</FieldLabel>
+              <FieldLabel htmlFor="club-category">หมวดหมู่ <span className="text-destructive" aria-hidden="true">*</span></FieldLabel>
               <Select
                 value={form.category || undefined}
                 onValueChange={(value) => setForm((f) => ({ ...f, category: value as ClubCategory }))}
               >
-                <SelectTrigger id="club-category" className="w-full">
+                <SelectTrigger id="club-category" className="w-full" aria-required="true" aria-invalid={showValidationErrors && !form.category} aria-describedby="club-category-error">
                   <SelectValue placeholder="เลือกหมวดหมู่" />
                 </SelectTrigger>
                 <SelectContent>
@@ -673,19 +697,24 @@ export default function AdminClubsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {showValidationErrors && !form.category && <p id="club-category-error" className="text-sm text-destructive" role="alert">กรุณาเลือกหมวดหมู่ชมรม</p>}
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-max-members">จำนวนสมาชิกสูงสุด</FieldLabel>
+              <FieldLabel htmlFor="club-max-members">จำนวนสมาชิกสูงสุด <span className="text-destructive" aria-hidden="true">*</span></FieldLabel>
               <Input
                 id="club-max-members"
                 type="number"
                 min={1}
+                required
                 value={form.maxMembers}
                 onChange={(e) => setForm((f) => ({ ...f, maxMembers: e.target.value }))}
+                aria-invalid={showValidationErrors && (!form.maxMembers.trim() || !(Number(form.maxMembers) >= 1))}
+                aria-describedby="club-max-members-error"
               />
+              {showValidationErrors && (!form.maxMembers.trim() || !(Number(form.maxMembers) >= 1)) && <p id="club-max-members-error" className="text-sm text-destructive" role="alert">กรุณาระบุจำนวนสมาชิกตั้งแต่ 1 คนขึ้นไป</p>}
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-image">รูปประจำชมรม</FieldLabel>
+              <FieldLabel htmlFor="club-image">รูปประจำชมรม <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <div className="flex items-center gap-4">
                 {imagePreviewUrl || form.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -720,7 +749,7 @@ export default function AdminClubsPage() {
                 a different endpoint and different limits from the cover
                 image above. */}
             <Field>
-              <FieldLabel htmlFor="club-gallery">รูปภาพชมรม</FieldLabel>
+              <FieldLabel htmlFor="club-gallery">รูปภาพชมรม <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
 
               {/* Photos already stored on the club. Removing one here only
                   marks it; the DELETE call happens when the form is saved. */}
@@ -787,7 +816,7 @@ export default function AdminClubsPage() {
               {galleryError && <p className="text-sm text-destructive">{galleryError}</p>}
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-advisor">อาจารย์ที่ปรึกษา</FieldLabel>
+              <FieldLabel htmlFor="club-advisor">อาจารย์ที่ปรึกษา <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Input
                 id="club-advisor"
                 value={form.advisorName}
@@ -795,7 +824,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-contact-email">อีเมลติดต่อ</FieldLabel>
+              <FieldLabel htmlFor="club-contact-email">อีเมลติดต่อ <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Input
                 id="club-contact-email"
                 type="email"
@@ -804,7 +833,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-contact-phone">เบอร์โทรติดต่อ</FieldLabel>
+              <FieldLabel htmlFor="club-contact-phone">เบอร์โทรติดต่อ <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Input
                 id="club-contact-phone"
                 value={form.contactPhone}
@@ -812,7 +841,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-meeting-schedule">ตารางประชุม</FieldLabel>
+              <FieldLabel htmlFor="club-meeting-schedule">ตารางประชุม <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Input
                 id="club-meeting-schedule"
                 value={form.meetingSchedule}
@@ -820,7 +849,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-location">สถานที่</FieldLabel>
+              <FieldLabel htmlFor="club-location">สถานที่ <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Input
                 id="club-location"
                 value={form.location}
@@ -828,7 +857,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-requirements">คุณสมบัติผู้สมัคร (บรรทัดละ 1 ข้อ)</FieldLabel>
+              <FieldLabel htmlFor="club-requirements">คุณสมบัติผู้สมัคร (บรรทัดละ 1 ข้อ) <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Textarea
                 id="club-requirements"
                 value={form.requirements}
@@ -837,7 +866,7 @@ export default function AdminClubsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="club-benefits">สิทธิประโยชน์ (บรรทัดละ 1 ข้อ)</FieldLabel>
+              <FieldLabel htmlFor="club-benefits">สิทธิประโยชน์ (บรรทัดละ 1 ข้อ) <span className="text-muted-foreground">(ไม่บังคับ)</span></FieldLabel>
               <Textarea
                 id="club-benefits"
                 value={form.benefits}
@@ -857,7 +886,7 @@ export default function AdminClubsPage() {
             <Button variant="outline" onClick={() => setFormDialogOpen(false)}>
               ยกเลิก
             </Button>
-            <Button onClick={handleSubmit} disabled={!isFormValid || isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
               {isSubmitting ? "กำลังบันทึก..." : formMode === "create" ? "เพิ่มชมรม" : "บันทึกการแก้ไข"}
             </Button>
           </DialogFooter>
