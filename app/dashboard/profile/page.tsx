@@ -71,7 +71,7 @@ export default function ProfilePage() {
   const [statsError, setStatsError] = useState<string | null>(null)
 
   const [isEditing, setIsEditing] = useState(false)
-  const [form, setForm] = useState({ phone: "", faculty: "", major: "", year: "" })
+  const [form, setForm] = useState({ studentId: "", phone: "", faculty: "", major: "", year: "" })
   const [formError, setFormError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -111,6 +111,7 @@ export default function ProfilePage() {
   const startEdit = () => {
     if (!user) return
     setForm({
+      studentId: user.studentId ?? "",
       phone: user.phone ?? "",
       faculty: user.faculty ?? "",
       major: user.major ?? "",
@@ -128,6 +129,8 @@ export default function ProfilePage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    const currentUser = user
+    if (!currentUser) return
     setFormError(null)
     setSaveMessage(null)
 
@@ -143,8 +146,18 @@ export default function ProfilePage() {
       return
     }
 
+    const currentStudentId = currentUser.studentId
+
+    // Google-created accounts keep their generated ID until the user replaces
+    // it. Any replacement must use the university student ID format.
+    if (form.studentId !== currentStudentId && !/^\d{11}-\d$/.test(form.studentId.trim())) {
+      setFormError("รหัสนักศึกษาต้องเป็นตัวเลข 11 หลัก ตามด้วย - และตัวเลข 1 หลัก")
+      return
+    }
+
     setIsSaving(true)
     const { user: updated, error } = await updateProfile({
+      ...(form.studentId !== currentStudentId ? { studentId: form.studentId.trim() } : {}),
       phone: form.phone.trim(),
       faculty: form.faculty,
       major: form.major,
@@ -238,6 +251,17 @@ export default function ProfilePage() {
                 </div>
 
                 <Separator />
+
+                <Field>
+                  <FieldLabel htmlFor="studentId">รหัสนักศึกษา</FieldLabel>
+                  <Input
+                    id="studentId"
+                    inputMode="numeric"
+                    placeholder="67543206105-8"
+                    value={form.studentId}
+                    onChange={(e) => setForm((p) => ({ ...p, studentId: e.target.value }))}
+                  />
+                </Field>
 
                 <Field>
                   <FieldLabel htmlFor="phone">เบอร์โทรศัพท์</FieldLabel>

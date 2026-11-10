@@ -49,6 +49,7 @@ interface RegisterData {
 // Editable profile fields — the subset of the user document PATCH /auth/me
 // accepts (firstName/lastName/phone/faculty/major/year are allowed).
 interface ProfileUpdateData {
+  studentId?: string
   firstName?: string
   lastName?: string
   phone?: string
